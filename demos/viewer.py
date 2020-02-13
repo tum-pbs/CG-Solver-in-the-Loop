@@ -13,7 +13,7 @@ class Viewer(App):
         self.value_directory = simpath
         self.view_scene = None
         self.action_load()
-        self.current_frame = EditableInt('Frame', 0, (min(self.view_scene.frames), max(self.view_scene.frames)))
+        self.current_frame = EditableInt('Frame', 1, (min(self.view_scene.frames), max(self.view_scene.frames)))
         self.value_looping = True
         for field_name in self.view_scene.fieldnames:
             self.add_field(field_name, lambda f=field_name: self.view_scene.read_array(f, self.current_frame))
