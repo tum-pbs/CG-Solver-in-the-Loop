@@ -25,7 +25,7 @@ def random_velocity(shape):
 class SmokeDataGen(App):
 
     def __init__(self):
-        App.__init__(self, 'Smoke Data Generation', HOW_TO, base_dir='~/phi/data', summary='smoke')
+        App.__init__(self, 'Smoke Data Generation', HOW_TO, base_dir='./data', summary='smoke')
         self.value_frames_per_simulation = 16
 
         self.solver = SparseCG(autodiff=True, max_iterations=500, accuracy=1e-3)
@@ -35,8 +35,8 @@ class SmokeDataGen(App):
         #GUI
         self.div = self.smoke.domain.centered_grid(0)
         self.div_pre = self.smoke.domain.centered_grid(0)
+
         self.p = self.smoke.domain.centered_grid(0)
-        self.p_pre = self.smoke.domain.centered_grid(0)
         self.p_div_pre = self.smoke.domain.centered_grid(0)
 
         self.add_field('Density', lambda: self.smoke.density)
@@ -44,7 +44,6 @@ class SmokeDataGen(App):
         self.add_field('Divergence', lambda: self.div)
         self.add_field('Divergence (Preprocessed)', lambda: self.div_pre)
         self.add_field('Pressure', lambda: self.p)
-        self.add_field('Pressure (Preprocessed)', lambda: self.p_pre)
         self.add_field('Pressure (of Preprocessed Div)', lambda: self.p_div_pre)
 
     def step(self):
@@ -63,19 +62,14 @@ class SmokeDataGen(App):
         self.div = self.smoke.solve_info["divergence"].data
 
         #preprocess data
-        mean = np.mean(self.div)
-        self.div_pre = self.div - mean
-        normalization_factor = np.percentile(math.abs(self.div_pre), 95)
-        self.div_pre = self.div_pre / normalization_factor
-
-        self.p_pre = (self.p - mean) / normalization_factor
+        self.div_pre = self.div - np.mean(self.div)
+        self.div_pre = self.div_pre / np.percentile(math.abs(self.div_pre), 95)
 
         press, _ = solve_pressure(self.smoke.domain.centered_grid(self.div_pre), self.smoke.domain, pressure_solver=self.solver)
         self.p_div_pre = press.data
 
 
         # save preprocessed data to disk
-        #self.scene.write_sim_frame([self.density_data.data, self.velocity_data.staggered_tensor(), self.div_data.data, self.p_data.data], ["Density", "Velocity", "Div_Data", "P_Data"], frame=self.steps)
-
+        self.scene.write_sim_frame([self.smoke.density.data, self.div_pre, self.p_div_pre], ["Density", "Divergence", "Pressure"], frame=self.steps)
 
 show(SmokeDataGen(), display=('Density', 'Velocity'))

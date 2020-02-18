@@ -120,7 +120,7 @@ def _is_div_free(velocity, is_div_free):
     return False
 
 
-def solve_pressure(divergence, fluiddomain, pressure_solver=None):
+def solve_pressure(divergence, fluiddomain, pressure_solver=None, guess=None):
     """
 Computes the pressure from the given velocity divergence using the specified solver.
     :param divergence: CenteredGrid
@@ -129,7 +129,7 @@ Computes the pressure from the given velocity divergence using the specified sol
     :return: pressure field, iteration count
     :rtype: CenteredGrid, int
     """
-    return poisson_solve(divergence, fluiddomain, solver=pressure_solver)
+    return poisson_solve(divergence, fluiddomain, solver=pressure_solver, guess=guess)
 
 
 def divergence_free(velocity, domain=None, obstacles=(), pressure_solver=None, return_info=False):
