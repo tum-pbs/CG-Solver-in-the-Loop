@@ -7,3 +7,7 @@ phi/local/hostname.py
 *.npz
 images/*
 data/*
+nn/data/*
+nn/DivData/*
+nn/NN_UNet3_Basic/*
+*.o
