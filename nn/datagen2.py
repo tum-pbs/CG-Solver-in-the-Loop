@@ -2,7 +2,7 @@ import sys
 from phi.flow import *
 
 
-world.batch_size = 4
+world.batch_size = 5
 
 
 HOW_TO = """
@@ -26,7 +26,7 @@ def random_velocity(shape):
 class SmokeDataGen(App):
 
     def __init__(self):
-        App.__init__(self, 'Smoke Data Generation', HOW_TO, base_dir='./data', summary='smoke')
+        App.__init__(self, 'Smoke Data Generation', HOW_TO, base_dir='./data', summary='smoke2')
         self.value_frames_per_simulation = 16
 
         self.solver = SparseCG(autodiff=True, max_iterations=500, accuracy=1e-3)
@@ -73,9 +73,20 @@ class SmokeDataGen(App):
         # save preprocessed data to disk
         self.scene.write_sim_frame([self.smoke.density.data, self.div_pre, self.p_div_pre], ["Density", "Divergence", "Pressure"], frame=self.steps)
 
-app = show(SmokeDataGen(), display=('Density', 'Velocity'))
 
-#If run from the command line with a fixed amount of steps specified
+
+# run from command line with fixed amount of steps
 if len(sys.argv) > 1:
-    steps_to_run = sys.argv[1]
+    sims_to_generate = int(sys.argv[1])
+
+    app = SmokeDataGen()
+    steps_to_run = (sims_to_generate / world.batch_size) * app.value_frames_per_simulation
+
+    app.info('Started Data Generation!')
+    app.info('Generating %s simulations...' % sims_to_generate)
+
     app.play(max_steps=steps_to_run)
+
+# run normally with GUI
+else:
+    app = show(SmokeDataGen(), display=('Density', 'Velocity'))
