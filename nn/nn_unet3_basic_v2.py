@@ -2,6 +2,8 @@
 from phi.tf.flow import *
 from phi.math import upsample2x
 
+import sys
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -109,7 +111,7 @@ def it_solver(X):
 class TrainingTest(LearningApp):
 
     def __init__(self):
-        LearningApp.__init__(self, 'Training', DESCRIPTION, learning_rate=2e-4, validation_batch_size=16, training_batch_size=32, base_dir="NN_UNet3_Basic")
+        LearningApp.__init__(self, 'Training', DESCRIPTION, learning_rate=2e-4, validation_batch_size=16, training_batch_size=32, base_dir="NN_UNet3_Basic", record_data=False)
 
         # --- placeholders ---
         self.divergence_in = divergence_in = placeholder(DOMAIN.centered_shape(batch_size=None))#Network Input
@@ -192,6 +194,8 @@ class TrainingTest(LearningApp):
         batch = self._val_reader[0:self.validation_batch_size]
         f_dict = self._feed_dict(batch, False)
 
+        self.info('Plot Residuum against Iterations...')
+
         for i in range(1, it_to_plot):
             f_dict[self.max_it] = i# set max_it to current i
 
@@ -238,8 +242,10 @@ class TrainingTest(LearningApp):
         plt.scatter(x=it,y=all_maxima,s=0.01,c=(0,0,1.0),alpha=0.8)
         plt.scatter(x=it, y=all_maxima_noguess, s=0.01, c=(1.0, 0, 0), alpha=0.8)
 
-        plt.savefig('residuumMax_vs_iterations')
+        path = self.scene.subpath(name='residuumMax_vs_iterations')
+        plt.savefig(path)
         plt.close()
+        self.info('Saved Residuum Max Plot to %s' % path)
 
         #Plot Mean of Residuum
         plt.ylabel('Residuum Mean (Blue: With Guess)')
@@ -250,8 +256,10 @@ class TrainingTest(LearningApp):
         plt.scatter(x=it,y=all_means,s=0.01,c=(0,0,1.0),alpha=0.8)
         plt.scatter(x=it, y=all_means_noguess, s=0.01, c=(1.0, 0, 0), alpha=0.8)
 
-        plt.savefig('residuumMean_vs_iterations')
+        path = self.scene.subpath(name='residuumMean_vs_iterations')
+        plt.savefig(path)
         plt.close()
+        self.info('Saved Residuum Mean Plot to %s' % path)
 
     def action_save_model(self):
         self.session.save(self.save_path)
@@ -259,4 +267,25 @@ class TrainingTest(LearningApp):
     def action_load_model(self):
         self.load_model(self.save_path)
 
-show(display=('Predicted Pressure', 'True Pressure'))
+
+
+# run from command line with fixed amount of steps
+if len(sys.argv) > 1:
+    steps_to_train = int(sys.argv[1])
+
+    app = TrainingTest()
+    app.prepare()
+    app.info('Start Training CNN UNet3 to predict pressure from divergence (unsupervised)!')
+    app.info('Train for %s steps...' % steps_to_train)
+
+    def on_finish():
+        app.info('Finished Training! (%s steps)' % steps_to_train)
+        dir = app.scene.subpath('checkpoint_%08d' % app.steps)
+        app.session.save(dir)
+        app.action_plot_iterations()
+
+    app.play(max_steps=steps_to_train, callback=on_finish)
+
+# run normally with GUI
+else:
+    app = show(display=('Predicted Pressure', 'True Pressure'))
