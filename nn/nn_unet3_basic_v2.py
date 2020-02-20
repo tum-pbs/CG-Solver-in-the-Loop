@@ -115,7 +115,7 @@ class TrainingTest(LearningApp):
         self.divergence_in = divergence_in = placeholder(DOMAIN.centered_shape(batch_size=None))#Network Input
         self.true_pressure = true_pressure = placeholder(DOMAIN.centered_shape(batch_size=None))#Ground Truth
 
-        self.max_it = tf.placeholder(tf.int32, (), "Max_Iterations")  # Only used for manual plotting
+        self.max_it = self.editable_int("Max_Iterations", 500, (500,500))# Only used for manual plotting
 
         # --- Build neural network ---
         with self.model_scope():
@@ -135,13 +135,20 @@ class TrainingTest(LearningApp):
 
         # --- Dataset ---
         self.set_data(dict={self.divergence_in.data: 'Divergence', self.true_pressure.data: 'Pressure'},
-                      train=Dataset.load(DATAPATH, range(0, 8)),
-                      val=Dataset.load(DATAPATH, range(8, 10)))
+                      train=Dataset.load(DATAPATH, range(0, 2799)),
+                      val=Dataset.load(DATAPATH, range(2800, 2999)))
 
         # --- GUI ---
         self.add_field('Divergence', self.divergence_in.data)
         self.add_field('Predicted Pressure', pred_pressure)
         self.add_field('True Pressure', self.true_pressure.data)
+
+        self.save_path = EditableString("Save/Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
+
+        # --- TensorBoard ---
+        self.add_scalar("Iterations (Predicted Guess)", self.iter_guess)
+        self.add_scalar("Iterations (True Guess)", self.iter_true)
+        self.add_scalar("Iterations (Zero Guess)", self.iter_zero)
 
     #print mean iterations with predicted guess as average over validation batch
     def action_iterations(self):
@@ -156,7 +163,6 @@ class TrainingTest(LearningApp):
 
             sample = self._val_reader[i]
             f_dict = self._feed_dict(sample, False)
-            f_dict = {**f_dict, self.max_it: 500}# append max_it
 
             #Solve for pressure for this sample using different guesses
             itZero, itPred, itTrue = self.session.run([self.iter_zero, self.iter_guess, self.iter_true], f_dict)
@@ -184,10 +190,10 @@ class TrainingTest(LearningApp):
         it_to_plot = 140
 
         batch = self._val_reader[0:self.validation_batch_size]
-        base_f_dict = self._feed_dict(batch, False)
+        f_dict = self._feed_dict(batch, False)
 
         for i in range(1, it_to_plot):
-            f_dict = {**base_f_dict, self.max_it: i}# append max_it
+            f_dict[self.max_it] = i# set max_it to current i
 
             #solve for pressure with and without predicted guess
             div_in, pressure, pressure_noguess = self.session.run([self.divergence_in, self.p_predGuess, self.p_noGuess], f_dict)
@@ -246,5 +252,11 @@ class TrainingTest(LearningApp):
 
         plt.savefig('residuumMean_vs_iterations')
         plt.close()
+
+    def action_save_model(self):
+        self.session.save(self.save_path)
+
+    def action_load_model(self):
+        self.load_model(self.save_path)
 
 show(display=('Predicted Pressure', 'True Pressure'))

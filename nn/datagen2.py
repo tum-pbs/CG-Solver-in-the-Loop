@@ -1,3 +1,4 @@
+import sys
 from phi.flow import *
 
 
@@ -72,4 +73,9 @@ class SmokeDataGen(App):
         # save preprocessed data to disk
         self.scene.write_sim_frame([self.smoke.density.data, self.div_pre, self.p_div_pre], ["Density", "Divergence", "Pressure"], frame=self.steps)
 
-show(SmokeDataGen(), display=('Density', 'Velocity'))
+app = show(SmokeDataGen(), display=('Density', 'Velocity'))
+
+#If run from the command line with a fixed amount of steps specified
+if len(sys.argv) > 1:
+    steps_to_run = sys.argv[1]
+    app.play(max_steps=steps_to_run)
