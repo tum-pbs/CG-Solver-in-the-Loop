@@ -26,12 +26,12 @@ def random_velocity(shape):
 class SmokeDataGen(App):
 
     def __init__(self):
-        App.__init__(self, 'Smoke Data Generation', HOW_TO, base_dir='./data', summary='smoke')
+        App.__init__(self, 'Smoke Data Generation', HOW_TO, base_dir='./data', summary='smoke_closed')
         self.value_frames_per_simulation = 16
 
         self.solver = SparseCG(autodiff=True, max_iterations=500, accuracy=1e-3)
-        self.smoke = world.add(Fluid(Domain([64, 64]), density=random_density, velocity=random_velocity, batch_size=world.batch_size, buoyancy_factor=0.1), physics=IncompressibleFlow(pressure_solver=self.solver))
-
+        self.domain = Domain([64, 64], boundaries=CLOSED)
+        self.smoke = world.add(Fluid(self.domain, density=random_density, velocity=random_velocity, batch_size=world.batch_size, buoyancy_factor=0.1), physics=IncompressibleFlow(pressure_solver=self.solver))
 
         #GUI
         self.div = self.smoke.domain.centered_grid(0)
@@ -66,7 +66,7 @@ class SmokeDataGen(App):
         self.div_pre = self.div - np.mean(self.div)
         self.div_pre = self.div_pre / np.percentile(math.abs(self.div_pre), 95)
 
-        press, _ = solve_pressure(self.smoke.domain.centered_grid(self.div_pre), self.smoke.domain, pressure_solver=self.solver)
+        press, _ = solve_pressure(self.domain.centered_grid(self.div_pre), self.domain, pressure_solver=self.solver)
         self.p_div_pre = press.data
 
 
