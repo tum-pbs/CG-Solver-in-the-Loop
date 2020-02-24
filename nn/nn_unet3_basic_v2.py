@@ -8,8 +8,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-DOMAIN = Domain([64, 64], boundaries=OPEN)  # [y, x]
-DATAPATH = 'data/smoke/'  # has to match DOMAIN
+DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
+DATAPATH = 'data/smoke_closed/'  # has to match DOMAIN
 DESCRIPTION = u"""
 Train a neural network to predict the pressure corresponding to the given divergence field.
 The predicted pressure should be able to be fed into a solver, reducing the iterations it needs to converge.
