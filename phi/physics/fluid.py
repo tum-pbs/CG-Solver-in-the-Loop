@@ -143,6 +143,7 @@ Projects the given velocity field by solving for and subtracting the pressure.
     :return: divergence-free velocity as StaggeredGrid
     """
     assert isinstance(velocity, StaggeredGrid)
+
     # --- Set up FluidDomain ---
     if domain is None:
         domain = Domain(velocity.resolution, OPEN)
@@ -152,13 +153,19 @@ Projects the given velocity field by solving for and subtracting the pressure.
         active_mask = 1 - obstacle_grid
     else:
         active_mask = math.ones(domain.centered_shape(name='active', extrapolation='constant'))
+
     accessible_mask = active_mask.copied_with(extrapolation=Material.accessible_extrapolation_mode(domain.boundaries))
     fluiddomain = FluidDomain(domain, active=active_mask, accessible=accessible_mask)
+
     # --- Boundary Conditions, Pressure Solve ---
     velocity = fluiddomain.with_hard_boundary_conditions(velocity)
+    adv_vel = velocity.copied_with()
     divergence_field = velocity.divergence(physical_units=False)
-    pressure, iterations = solve_pressure(divergence_field, fluiddomain, pressure_solver=pressure_solver)
+
+    pressure, iterations = solve_pressure(velocity.divergence(physical_units=False), fluiddomain, pressure_solver=pressure_solver)
     pressure *= velocity.dx[0]
+
     gradp = StaggeredGrid.gradient(pressure)
     velocity -= fluiddomain.with_hard_boundary_conditions(gradp)
-    return velocity if not return_info else (velocity, {'pressure': pressure, 'iterations': iterations, 'divergence': divergence_field})
+
+    return velocity if not return_info else (velocity, {'pressure': pressure, 'iterations': iterations, 'divergence': divergence_field, 'advected velocity': adv_vel})

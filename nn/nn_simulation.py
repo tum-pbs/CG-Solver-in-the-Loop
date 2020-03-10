@@ -8,10 +8,11 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
+DOMAIN = Domain([128, 128], boundaries=CLOSED)  # [y, x]
 DATAPATH = 'data/smoke_closed/'  # has to match DOMAIN
 DESCRIPTION = u"""
 Simulate random smoke distributions using a trained NN and a normal solver for comparison.
+Left: Simulation using NN as solver         Right: Simulation using numeric solver
 """
 
 # Network structure (Based on U-Net)
@@ -228,7 +229,6 @@ class NetworkSimulation(LearningApp):
             self.smoke.velocity = random_velocity
             self.smoke_nn.velocity = self.smoke.velocity
         world.step() # simulate one step
-
 
 
 
