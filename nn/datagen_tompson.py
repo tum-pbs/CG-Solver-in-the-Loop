@@ -2,7 +2,7 @@ import sys
 from phi.flow import *
 
 
-world.batch_size = 1
+world.batch_size = 5
 
 
 HOW_TO = """
