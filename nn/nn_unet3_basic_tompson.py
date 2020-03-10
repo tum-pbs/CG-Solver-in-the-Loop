@@ -144,7 +144,7 @@ class TrainingTest(LearningApp):
             p_Zero10s, _        = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=None)
 
             #Tompson loss quantities (û)
-            v_corrected = correct(self.v_in, DOMAIN.centered_grid(pred_pressure))
+            self.v_corrected = correct(self.v_in, DOMAIN.centered_grid(pred_pressure))
             self.v_corrected_true = correct(self.v_in, self.true_pressure)
 
 
@@ -154,11 +154,11 @@ class TrainingTest(LearningApp):
             self.p_noGuess,   self.iter_zero  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=None)
 
         # --- Tompson Loss function ---
-        v_loss = math.l2_loss(v_corrected - self.v_true)
+        v_loss = math.l2_loss(self.v_corrected - self.v_true)
         p_loss = math.l2_loss(pred_pressure - true_pressure)
-        div_loss = math.l2_loss(v_corrected.divergence(physical_units=False))
+        div_loss = math.l2_loss(self.v_corrected.divergence(physical_units=False))
 
-        loss = 0.9 * p_loss + 0.1 * div_loss
+        loss = 0.25 * v_loss + 0.5 * p_loss + 0.25 * div_loss
         self.add_objective(loss, 'Loss')
 
         # --- Dataset ---
@@ -171,9 +171,10 @@ class TrainingTest(LearningApp):
         self.add_field('Predicted Pressure', pred_pressure)
         self.add_field('True Pressure', self.true_pressure)
         self.add_field('Advected Velocity', self.v_in)
-        self.add_field('Corrected Velocity (NN)', v_corrected)
+        self.add_field('Corrected Velocity (NN)', self.v_corrected)
         self.add_field('Corrected Velocity (True)', self.v_true)
         self.add_field('Corrected Velocity (with True Pressure)', self.v_corrected_true)
+        self.add_field('Residuum', self.v_corrected.divergence(physical_units=False))
 
         self.save_path = EditableString("Save/Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
 
