@@ -9,7 +9,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
-DATAPATH = 'data/smoke_normalized/'  # has to match DOMAIN
+DATAPATH = 'data/smoke_v3/'  # has to match DOMAIN
 DESCRIPTION = u"""
 Train a neural network to predict the pressure corresponding to the given divergence field.
 The predicted pressure should be able to be fed into a solver, reducing the iterations it needs to converge.
@@ -117,9 +117,11 @@ def predict_pressure(divergence, normalize=True):
         s = math.reshape(s, (-1, 1, 1, 1)) # reshape to broadcast correctly across batch
 
         #multiply output by same factor (de-normalize)
-        return s * pressure_unet(divergence.data / s)
+        result =  s * pressure_unet(divergence.data / s)
     else:
-        return pressure_unet(divergence.data)
+        result = pressure_unet(divergence.data)
+
+    return CenteredGrid(result, divergence.box, name='pressure')
 
 
 class SolverAssistedUnet(LearningApp):
@@ -142,7 +144,7 @@ class SolverAssistedUnet(LearningApp):
 
             # Pressure Solves with different Guesses (max iterations as placeholder)
             self.p_predGuess, self.iter_guess = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=pred_pressure)
-            self.p_trueGuess, self.iter_true  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=true_pressure.data)
+            self.p_trueGuess, self.iter_true  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=true_pressure)
             self.p_noGuess,   self.iter_zero  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=None)
 
         # --- Loss function ---
@@ -155,9 +157,9 @@ class SolverAssistedUnet(LearningApp):
                       val=Dataset.load(DATAPATH, range(2800, 2999)))
 
         # --- GUI ---
-        self.add_field('Divergence (Normalized)', self.divergence_in.data)
-        self.add_field('Predicted Pressure (NOT De-Normalized)', pred_pressure)
-        self.add_field('True Pressure', self.true_pressure.data)
+        self.add_field('Divergence', self.divergence_in)
+        self.add_field('Predicted Pressure', pred_pressure)
+        self.add_field('True Pressure', self.true_pressure)
 
         self.save_path = EditableString("Save/Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
 

@@ -7,7 +7,7 @@ frames_per_sim = 16
 
 HOW_TO = """
 Generate random density and velocity fields and simulate them for %d frames (CLOSED boundary).
-For each frame, "Density", "Divergence", "Pressure", "Advected Velocity" and "Corrected Velocity" are saved.
+For each frame, "Density", "Divergence", "Pressure", "Divergent Velocity" and "Corrected Velocity" are saved.
 
 """ % (frames_per_sim)
 
@@ -61,13 +61,13 @@ class SmokeDataGen(App):
         #get data from fluid
         self.p = self.smoke.solve_info["pressure"]
         self.div = self.smoke.solve_info["divergence"]
-        self.v_div = self.smoke.solve_info['advected velocity']
+        self.v_div = self.smoke.solve_info['divergent_velocity']
         self.v_true = self.smoke.velocity
 
 
 
         # --- Save Data to Disk---
-        self.scene.write_sim_frame([self.smoke.density.data, self.div.data, self.p.data, self.v_div.staggered_tensor(), self.v_true.staggered_tensor()], ["Density", "Divergence", "Pressure", "Advected Velocity", "Corrected Velocity"], frame=self.steps)
+        self.scene.write_sim_frame([self.smoke.density.data, self.div.data, self.p.data, self.v_div.staggered_tensor(), self.v_true.staggered_tensor()], ["Density", "Divergence", "Pressure", "Divergent Velocity", "Corrected Velocity"], frame=self.steps)
 
 
 

@@ -9,7 +9,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
-DATAPATH = 'data/smoke_normalized/'  # has to match DOMAIN
+DATAPATH = 'data/smoke_v3/'  # has to match DOMAIN
 DESCRIPTION = u"""
 Train a neural network to predict the pressure corresponding to the given divergence field.
 The predicted pressure should be able to be fed into a solver, reducing the iterations it needs to converge.
@@ -117,9 +117,11 @@ def predict_pressure(divergence, normalize=True):
         s = math.reshape(s, (-1, 1, 1, 1)) # reshape to broadcast correctly across batch
 
         #multiply output by same factor (de-normalize)
-        return s * pressure_unet(divergence.data / s)
+        result =  s * pressure_unet(divergence.data / s)
     else:
-        return pressure_unet(divergence.data)
+        result = pressure_unet(divergence.data)
+
+    return CenteredGrid(result, divergence.box, name='pressure')
 
 def correct(velocity, pressure):
     gradp = StaggeredGrid.gradient(pressure)
@@ -162,7 +164,7 @@ class TompsonUnet(LearningApp):
 
             # Pressure Solves with different Guesses (max iterations as placeholder)
             self.p_predGuess, self.iter_guess = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=pred_pressure)
-            self.p_trueGuess, self.iter_true  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=true_pressure.data)
+            self.p_trueGuess, self.iter_true  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=true_pressure)
             self.p_noGuess,   self.iter_zero  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=None)
 
         # --- Tompson Loss function ---
@@ -173,9 +175,9 @@ class TompsonUnet(LearningApp):
         self.add_objective(loss, 'Tompson Loss')
 
         # --- Dataset ---
-        self.set_data(dict={self.divergence_in.data: 'Divergence', self.true_pressure.data: 'Pressure', v_in_data: 'Advected Velocity', v_true_data: 'Corrected Velocity'},
-                      train=Dataset.load(DATAPATH, range(0, 279)),
-                      val=Dataset.load(DATAPATH, range(289, 299)))
+        self.set_data(dict={self.divergence_in.data: 'Divergence', self.true_pressure.data: 'Pressure', v_in_data: 'Divergent Velocity', v_true_data: 'Corrected Velocity'},
+                      train=Dataset.load(DATAPATH, range(0, 2799)),
+                      val=Dataset.load(DATAPATH, range(2800, 2999)))
 
         # --- GUI ---
         self.add_field('Divergence', self.divergence_in)
@@ -187,8 +189,6 @@ class TompsonUnet(LearningApp):
         self.add_field('Corrected Velocity (True)', self.v_true)
         self.add_field('Corrected Velocity (with True Pressure)', self.v_corrected_true)
         self.add_field('Residuum', residuum)
-
-        self.add_field('Solver for Divergence_in', self.p_trueGuess)
 
         self.save_path = EditableString("Save/Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
 
