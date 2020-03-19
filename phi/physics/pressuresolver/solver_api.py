@@ -125,12 +125,16 @@ Solves the Poisson equation Δp = input_field for p.
     :param input_field: CenteredGrid
     :param poisson_domain: PoissonDomain instance
     :param solver: PoissonSolver to use, None for default
-    :param guess: pressure field to use as starting point
+    :param guess: CenteredGrid with same size and resolution as input_field
     :return: p as CenteredGrid, iteration count as int or None if not available
     :rtype: CenteredGrid, int
     """
     from .sparse import SparseSciPy, SparseCG
     assert isinstance(input_field, CenteredGrid)
+    if guess is not None:
+        assert isinstance(guess, CenteredGrid)
+        assert guess.compatible(input_field)
+        guess = guess.data
     if isinstance(poisson_domain, Domain):
         poisson_domain = PoissonDomain(poisson_domain)
     if solver is None:
