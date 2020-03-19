@@ -120,16 +120,17 @@ def _is_div_free(velocity, is_div_free):
     return False
 
 
-def solve_pressure(divergence, fluiddomain, pressure_solver=None):
+def solve_pressure(divergence, fluiddomain, pressure_solver=None, guess=None):
     """
 Computes the pressure from the given velocity divergence using the specified solver.
     :param divergence: CenteredGrid
     :param fluiddomain: FluidDomain instance
     :param pressure_solver: PressureSolver to use, None for default
+    :param guess: pressure field to use as starting point
     :return: pressure field, iteration count
     :rtype: CenteredGrid, int
     """
-    return poisson_solve(divergence, fluiddomain, solver=pressure_solver)
+    return poisson_solve(divergence, fluiddomain, solver=pressure_solver, guess=guess)
 
 
 def divergence_free(velocity, domain=None, obstacles=(), pressure_solver=None, return_info=False):
@@ -156,9 +157,10 @@ Projects the given velocity field by solving for and subtracting the pressure.
     fluiddomain = FluidDomain(domain, active=active_mask, accessible=accessible_mask)
     # --- Boundary Conditions, Pressure Solve ---
     velocity = fluiddomain.with_hard_boundary_conditions(velocity)
+    adv_vel = velocity
     divergence_field = velocity.divergence(physical_units=False)
-    pressure, iterations = solve_pressure(divergence_field, fluiddomain, pressure_solver=pressure_solver)
+    pressure, iterations = solve_pressure(velocity.divergence(physical_units=False), fluiddomain, pressure_solver=pressure_solver)
     pressure *= velocity.dx[0]
     gradp = StaggeredGrid.gradient(pressure)
     velocity -= fluiddomain.with_hard_boundary_conditions(gradp)
-    return velocity if not return_info else (velocity, {'pressure': pressure, 'iterations': iterations, 'divergence': divergence_field})
+    return velocity if not return_info else (velocity, {'pressure': pressure, 'iterations': iterations, 'divergence': divergence_field, 'advected velocity': adv_vel})
