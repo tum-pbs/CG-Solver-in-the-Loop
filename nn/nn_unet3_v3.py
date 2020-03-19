@@ -108,6 +108,19 @@ def pressure_unet(divergence, scope="pressure_unet"):
 def it_solver(X):
     return SparseCG(autodiff=True, max_iterations=X, accuracy=1e-3)
 
+# Predict pressure using Neural Network
+def predict_pressure(divergence, normalize=True):
+
+    if normalize:
+        #divide input by its standard deviation (normalize)
+        s = math.std(divergence.data, axis=(1, 2, 3))
+        s = math.reshape(s, (-1, 1, 1, 1)) # reshape to broadcast correctly across batch
+
+        #multiply output by same factor (de-normalize)
+        return s * pressure_unet(divergence.data / s)
+    else:
+        return pressure_unet(divergence.data)
+
 
 class SolverAssistedUnet(LearningApp):
 
@@ -122,7 +135,7 @@ class SolverAssistedUnet(LearningApp):
 
         # --- Build neural network ---
         with self.model_scope():
-            self.pred_pressure = pred_pressure = pressure_unet(divergence_in.data)#NN Pressure Guess
+            self.pred_pressure = pred_pressure = predict_pressure(divergence_in)#NN Pressure Guess
 
             p_networkPlus10s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=pred_pressure)
             p_Zero10s, _        = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=None)

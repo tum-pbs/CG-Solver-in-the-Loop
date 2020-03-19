@@ -108,16 +108,20 @@ def pressure_unet(divergence, scope="pressure_unet"):
 def it_solver(X):
     return SparseCG(autodiff=True, max_iterations=X, accuracy=1e-3)
 
+# Predict pressure using Neural Network
+def predict_pressure(divergence, normalize=True):
 
-def correct(velocity, pressure, denormalize=False):
+    if normalize:
+        #divide input by its standard deviation (normalize)
+        s = math.std(divergence.data, axis=(1, 2, 3))
+        s = math.reshape(s, (-1, 1, 1, 1)) # reshape to broadcast correctly across batch
 
-    if denormalize:
-        div = velocity.divergence(physical_units=False)
-        factor = math.std(div.data, axis=(1, 2, 3))
-        factor = math.reshape(factor, (-1, 1, 1, 1))  # reshape to broadcast correctly across batch
+        #multiply output by same factor (de-normalize)
+        return s * pressure_unet(divergence.data / s)
+    else:
+        return pressure_unet(divergence.data)
 
-        pressure = pressure * factor
-
+def correct(velocity, pressure):
     gradp = StaggeredGrid.gradient(pressure)
     return (velocity - gradp)
 
@@ -146,14 +150,14 @@ class TompsonUnet(LearningApp):
 
         # --- Build neural network ---
         with self.model_scope():
-            self.pred_pressure = pred_pressure = pressure_unet(divergence_in.data)#NN Pressure Guess
+            self.pred_pressure = pred_pressure = predict_pressure(divergence_in)#NN Pressure Guess
 
             p_networkPlus10s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=pred_pressure)
             p_Zero10s, _        = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=None)
 
             #Tompson loss quantities (û)
-            self.v_corrected = correct(self.v_in, DOMAIN.centered_grid(pred_pressure), denormalize=True)
-            self.v_corrected_true = correct(self.v_in, self.true_pressure, denormalize=True)
+            self.v_corrected = correct(self.v_in, DOMAIN.centered_grid(pred_pressure))
+            self.v_corrected_true = correct(self.v_in, self.true_pressure)
 
 
             # Pressure Solves with different Guesses (max iterations as placeholder)
