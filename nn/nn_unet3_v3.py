@@ -9,12 +9,13 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
-DATAPATH = 'data/smoke_tompson/'  # has to match DOMAIN
+DATAPATH = 'data/smoke_normalized/'  # has to match DOMAIN
 DESCRIPTION = u"""
 Train a neural network to predict the pressure corresponding to the given divergence field.
 The predicted pressure should be able to be fed into a solver, reducing the iterations it needs to converge.
 
-This basic version does not support obstacles or closed borders.
+This version trains with normalized divergence fields and thus learns to output pressure fields that need to be
+de-normalized by multiplying by the standard deviation of the original "Advected Velocity"'s divergence field.
 """
 
 # Network structure (Based on U-Net)
@@ -108,31 +109,14 @@ def it_solver(X):
     return SparseCG(autodiff=True, max_iterations=X, accuracy=1e-3)
 
 
-def correct(velocity, pressure):
-    gradp = StaggeredGrid.gradient(pressure)
-    return (velocity - gradp)
-
-
-class TrainingTest(LearningApp):
+class SolverAssistedUnet(LearningApp):
 
     def __init__(self):
         LearningApp.__init__(self, 'Training', DESCRIPTION, learning_rate=2e-4, validation_batch_size=16, training_batch_size=32, base_dir="NN_UNet3_Basic", record_data=False)
 
         # --- placeholders ---
-        #Centered Grids
         self.divergence_in = divergence_in = placeholder(DOMAIN.centered_shape(batch_size=None))#Network Input
-        self.true_pressure = true_pressure = placeholder(DOMAIN.centered_shape(batch_size=None))  # Ground Truth
-
-        #Staggered Grids
-        staggered_shape = (None, *(DOMAIN.resolution + 1), DOMAIN.rank)
-
-        v_in_data = tf.placeholder(dtype=tf.float32, shape=staggered_shape)
-        self.v_in = StaggeredGrid(v_in_data)  # Velocity corresponding to Network Input
-
-        v_true_data = tf.placeholder(dtype=tf.float32, shape=staggered_shape)
-        self.v_true = StaggeredGrid(v_true_data)  # Velocity corrected, Ground Truth
-
-
+        self.true_pressure = true_pressure = placeholder(DOMAIN.centered_shape(batch_size=None))#Ground Truth
 
         self.max_it = self.editable_int("Max_Iterations", 500, (500,500))# Only used for manual plotting
 
@@ -143,38 +127,24 @@ class TrainingTest(LearningApp):
             p_networkPlus10s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=pred_pressure)
             p_Zero10s, _        = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=None)
 
-            #Tompson loss quantities (û)
-            self.v_corrected = correct(self.v_in, DOMAIN.centered_grid(pred_pressure))
-            self.v_corrected_true = correct(self.v_in, self.true_pressure)
-
-
             # Pressure Solves with different Guesses (max iterations as placeholder)
             self.p_predGuess, self.iter_guess = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=pred_pressure)
             self.p_trueGuess, self.iter_true  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=true_pressure.data)
             self.p_noGuess,   self.iter_zero  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=None)
 
-        # --- Tompson Loss function ---
-        v_loss = math.l2_loss(self.v_corrected - self.v_true)
-        p_loss = math.l2_loss(pred_pressure - true_pressure)
-        div_loss = math.l2_loss(self.v_corrected.divergence(physical_units=False))
-
-        loss = div_loss
-        self.add_objective(loss, 'Loss')
+        # --- Loss function ---
+        loss = math.l2_loss(p_networkPlus10s - pred_pressure)
+        self.add_objective(loss, 'Solver-Based Loss')
 
         # --- Dataset ---
-        self.set_data(dict={self.divergence_in.data: 'Divergence', self.true_pressure.data: 'Pressure', v_in_data: 'Advected Velocity', v_true_data: 'Corrected Velocity'},
+        self.set_data(dict={self.divergence_in.data: 'Divergence', self.true_pressure.data: 'Pressure'},
                       train=Dataset.load(DATAPATH, range(0, 2799)),
-                      val=Dataset.load(DATAPATH, range(2899, 2999)))
+                      val=Dataset.load(DATAPATH, range(2800, 2999)))
 
         # --- GUI ---
-        self.add_field('Divergence', self.divergence_in)
-        self.add_field('Predicted Pressure', pred_pressure)
-        self.add_field('True Pressure', self.true_pressure)
-        self.add_field('Advected Velocity', self.v_in)
-        self.add_field('Corrected Velocity (NN)', self.v_corrected)
-        self.add_field('Corrected Velocity (True)', self.v_true)
-        self.add_field('Corrected Velocity (with True Pressure)', self.v_corrected_true)
-        self.add_field('Residuum', self.v_corrected.divergence(physical_units=False))
+        self.add_field('Divergence (Normalized)', self.divergence_in.data)
+        self.add_field('Predicted Pressure (NOT De-Normalized)', pred_pressure)
+        self.add_field('True Pressure', self.true_pressure.data)
 
         self.save_path = EditableString("Save/Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
 
@@ -220,7 +190,7 @@ class TrainingTest(LearningApp):
         all_maxima_noguess = []
         all_means_noguess = []
         it = []
-        it_to_plot = 200
+        it_to_plot = 140
 
         batch = self._val_reader[0:self.validation_batch_size]
         f_dict = self._feed_dict(batch, False)
@@ -304,9 +274,10 @@ class TrainingTest(LearningApp):
 if len(sys.argv) > 1:
     steps_to_train = int(sys.argv[1])
 
-    app = TrainingTest()
+    app = SolverAssistedUnet()
     app.prepare()
     app.info('Start Training CNN UNet3 to predict pressure from divergence (unsupervised)!')
+    app.info('Loss: Solver-based')
     app.info('Train for %s steps...' % steps_to_train)
 
     def on_finish():

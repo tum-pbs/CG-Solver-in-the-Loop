@@ -114,9 +114,14 @@ class NNPoissonSolver(PoissonSolver):
     def __init__(self):
         PoissonSolver.__init__(self, 'NN', supported_devices=('CPU', 'GPU', 'TPU'), supports_guess=False, supports_loop_counter=False, supports_continuous_masks=False)
 
+    # this solver normalizes the input, feeds it into the NN and de-normalizes the output again
     def solve(self, field, domain, guess):
         with tf.variable_scope('model'):
-            return pressure_unet(field), None
+
+            factor = math.std(field.data, axis=(1, 2, 3))
+            factor = math.reshape(factor, (-1, 1, 1, 1))  # reshape to broadcast correctly across batch
+
+            return factor * pressure_unet(field / factor), None
 
 
 class NetworkSimulation(App):
