@@ -144,4 +144,4 @@ Solves the Poisson equation Δp = input_field for p.
             solver = SparseCG()
     pressure, iteration = solver.solve(input_field.data, poisson_domain, guess=guess)
     pressure = CenteredGrid(pressure, input_field.box, extrapolation=input_field.extrapolation, name='pressure')
-return pressure, iteration
+    return pressure, iteration

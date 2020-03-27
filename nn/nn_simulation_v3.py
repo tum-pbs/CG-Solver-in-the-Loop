@@ -260,14 +260,16 @@ class NetworkSimulation(App):
         all_maxima_noguess = []
         all_means_noguess = []
         it = []
-        it_to_plot = 20
+        it_to_plot = 200
         batch_size = 100
 
         perm = np.random.permutation(3000)
 
         batch = self.data_reader[perm[:batch_size]]
-        f_dict = {self.divergence_in.data: batch[0], self.true_pressure.data: batch[1]}
-        f_dict[self.accuracy] = 1e-10  # very high accuracy so it can solve "as long as possible"
+        zero = np.zeros_like(batch[0])
+
+        f_dict = {self.divergence_in.data: batch[0], self.true_pressure.data: batch[1], self.zero_guess.data: zero}
+        f_dict[self.accuracy] = 1e-8  # very high accuracy so it can solve "as long as possible"
 
         self.info('Plot Residuum against Iterations...')
 
@@ -302,7 +304,7 @@ class NetworkSimulation(App):
 
 
             # residuum without guess (absolute value)
-            residuum_noguess = math.abs(div_in - pressure.laplace()).data[:, 1:-1, 1:-1, :]
+            residuum_noguess = math.abs(div_in - pressure_noguess.laplace()).data[:, 1:-1, 1:-1, :]
             batch_maxima_noguess = math.max(residuum_noguess, axis=(1, 2, 3))
             batch_means_noguess = math.mean(residuum_noguess, axis=(1, 2, 3))
 
