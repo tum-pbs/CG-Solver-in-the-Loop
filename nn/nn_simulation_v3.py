@@ -160,7 +160,7 @@ class NetworkSimulation(App):
         # --- Set up Numerical Fluid Simulation ---
         self.solver = SparseCG(autodiff=True, max_iterations=500, accuracy=1e-3)
         self.smoke = world.add(Fluid(DOMAIN, name='smoke', density=random_density, velocity=random_velocity, buoyancy_factor=0.1), physics=IncompressibleFlow(pressure_solver=self.solver))
-        self.smoke_nn = world.add(Fluid(DOMAIN, name='NN_smoke', density=self.smoke.density, velocity=self.smoke.velocity, buoyancy_factor=0.1), physics=IncompressibleFlow(pressure_solver=NNPoissonSolver(normalizeInput=False)))
+        self.smoke_nn = world.add(Fluid(DOMAIN, name='NN_smoke', density=self.smoke.density, velocity=self.smoke.velocity, buoyancy_factor=0.1), physics=IncompressibleFlow(pressure_solver=NNPoissonSolver(normalizeInput=True)))
 
 
         #placeholders
@@ -194,6 +194,9 @@ class NetworkSimulation(App):
         self.add_field('Residuum', lambda: self.smoke.velocity.divergence())
         self.add_field('Residuum NN', lambda: self.smoke_nn.velocity.divergence())
 
+        self.add_field('Pressure', lambda: self.smoke.solve_info.get('pressure', None))
+        self.add_field('Pressure NN', lambda: self.smoke_nn.solve_info.get('pressure', None))
+
         self.save_path = EditableString("Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
         # self.save_path = EditableString("Load Path", 'NN_Unet3_Basic/nn_closed_borders/checkpoint_00300000')
 
@@ -204,7 +207,7 @@ class NetworkSimulation(App):
         self.info('Plot iterations for accuracies...')
 
         perm = np.random.permutation(3000)[:100]
-        accuracies = (1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6)
+        accuracies = (1e-1, 0.5e-1, 1e-2, 0.5e-2, 1e-3, 0.5e-3, 1e-4, 0.5e-4, 1e-5, 0.5e-5, 1e-6)
 
         mean_it_zero = []
         mean_it_true = []
@@ -235,12 +238,27 @@ class NetworkSimulation(App):
             mean_it_true.append(math.mean(iterations_true))
             mean_it_pred.append(math.mean(iterations_guess))
 
+        self.info('Finished calculation, plotting...')
+
         #Plot Maximum of Residuum
         plt.ylabel('Iterations')
-        plt.xscale('log')
-        plt.gca().set_xlim(accuracies[0], accuracies[-1])
-        plt.xlabel('Accuracy')
-        plt.plot(accuracies, mean_it_zero, 'r', accuracies, mean_it_pred, 'b', accuracies, mean_it_true, 'g')
+
+        fig, ax = plt.subplots()
+        width = 0.25
+        x = np.arange(len(accuracies))
+
+        rects1 = ax.bar(x - width, mean_it_zero, width, label='Zero Guess', color='red')
+        rects2 = ax.bar(x, mean_it_pred, width, label='Predicted Guess', color='blue')
+        rects2 = ax.bar(x + width, mean_it_true, width, label='True Guess', color='green')
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(accuracies)
+        ax.set_ylabel('Iterations')
+        ax.set_title('Iterations needed to achieve target Accuracy')
+
+        ax.legend()
+        fig.tight_layout()
+
 
         path = self.scene.subpath(name='iterations_for_accuracy')
         plt.savefig(path)
@@ -269,7 +287,7 @@ class NetworkSimulation(App):
         zero = np.zeros_like(batch[0])
 
         f_dict = {self.divergence_in.data: batch[0], self.true_pressure.data: batch[1], self.zero_guess.data: zero}
-        f_dict[self.accuracy] = 1e-8  # very high accuracy so it can solve "as long as possible"
+        f_dict[self.accuracy] = 1e-12  # very high accuracy so it can solve "as long as possible"
 
         self.info('Plot Residuum against Iterations...')
 
