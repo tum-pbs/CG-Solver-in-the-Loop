@@ -110,8 +110,8 @@ def random_velocity(shape):
     return math.randfreq(shape, power=32) * 2
 
 # Solver that only solves up to X iterations
-def it_solver(X):
-    return SparseCG(autodiff=True, max_iterations=X, accuracy=1e-3)
+def it_solver(X, acc=1e-3):
+    return SparseCG(autodiff=True, max_iterations=X, accuracy=acc)
 
 # Predict pressure using Neural Network
 def predict_pressure(divergence, normalize=True):
@@ -166,20 +166,23 @@ class NetworkSimulation(App):
         #placeholders
         self.divergence_in = placeholder(DOMAIN.centered_shape(batch_size=None))#Network Input
         self.true_pressure = placeholder(DOMAIN.centered_shape(batch_size=None))  # Ground Truth
-        self.max_it = self.editable_int("Max_Iterations", 500, (500, 500))  # Only used for manual plotting
+
+        self.zero_guess = placeholder(DOMAIN.centered_shape(batch_size=None))  # Zero Pressure Guess
+
+        self.max_it = self.editable_int("Max_Iterations", 500, (500,500))# Only used for manual plotting
+        self.accuracy = self.editable_float("Accuracy", 1e-3)# Only used for manual plotting
 
         # --- Load Test Set ---
         test_set = Dataset.load(DATAPATH, range(0, 2999), name='testset')
-        test_set.shuffle()
         self.data_reader = BatchReader(test_set, ("Divergence", "Pressure"))
 
         with tf.variable_scope('model'):
             self.pred_pressure = predict_pressure(self.divergence_in)  # NN Pressure Guess
 
             # Pressure Solves with different Guesses (max iterations as placeholder)
-            self.p_predGuess, self.iter_guess = solve_pressure(self.divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=self.pred_pressure)
-            self.p_trueGuess, self.iter_true = solve_pressure(self.divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=self.true_pressure)
-            self.p_noGuess, self.iter_zero = solve_pressure(self.divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=None)
+            self.p_predGuess, self.iter_guess = solve_pressure(self.divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it, acc=self.accuracy), guess=self.pred_pressure)
+            self.p_trueGuess, self.iter_true = solve_pressure(self.divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it, acc=self.accuracy), guess=self.true_pressure)
+            self.p_noGuess, self.iter_zero = solve_pressure(self.divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it, acc=self.accuracy), guess=self.zero_guess)
 
         # --- GUI ---
         self.value_frames_per_simulation = 100
@@ -197,32 +200,53 @@ class NetworkSimulation(App):
     def action_load_model(self):
         self.session.restore(self.save_path, scope='model')
 
-    #print mean iterations with predicted guess as average over validation batch
-    def action_iterations(self):
-        print("Mean Iterations (over entire test set) with current NN prediction as guess:")
+    def action_plot_accuracy(self):
+        self.info('Plot iterations for accuracies...')
 
-        iterations_zero = []
-        iterations_guess = []
-        iterations_true = []
+        perm = np.random.permutation(3000)[:100]
+        accuracies = (1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6)
 
-        #Look at each sample individually
-        for i in range(100, 200):
+        mean_it_zero = []
+        mean_it_true = []
+        mean_it_pred = []
 
-            sample = self.data_reader[i]
-            f_dict = {self.divergence_in.data: sample[0], self.true_pressure.data: sample[1], self.max_it: 500}
+        for accuracy in accuracies:
+            iterations_zero = []
+            iterations_guess = []
+            iterations_true = []
 
-            #Solve for pressure for this sample using different guesses
-            itZero, itPred, itTrue = self.session.run([self.iter_zero, self.iter_guess, self.iter_true], f_dict)
+            self.info('Calculating for %s...' % accuracy)
 
-            iterations_zero.append(itZero)
-            iterations_guess.append(itPred)
-            iterations_true.append(itTrue)
+            # Look at each sample individually
+            for i in perm:
+                sample = self.data_reader[int(i)]
+                zero = np.zeros_like(sample[0])
 
-            print(i)
+                f_dict = {self.divergence_in.data: sample[0], self.true_pressure.data: sample[1], self.zero_guess.data: zero, self.max_it: 2000, self.accuracy: accuracy}
 
-        print("Zero Guess: ", np.mean(iterations_zero))
-        print("Predicted Guess: ", np.mean(iterations_guess))
-        print("True Guess: ", np.mean(iterations_true), "\n")
+                # Solve for pressure for this sample using different guesses
+                itZero, itPred, itTrue = self.session.run([self.iter_zero, self.iter_guess, self.iter_true], f_dict)
+
+                iterations_zero.append(itZero)
+                iterations_guess.append(itPred)
+                iterations_true.append(itTrue)
+
+            mean_it_zero.append(math.mean(iterations_zero))
+            mean_it_true.append(math.mean(iterations_true))
+            mean_it_pred.append(math.mean(iterations_guess))
+
+        #Plot Maximum of Residuum
+        plt.ylabel('Iterations')
+        plt.xscale('log')
+        plt.gca().set_xlim(accuracies[0], accuracies[-1])
+        plt.xlabel('Accuracy')
+        plt.plot(accuracies, mean_it_zero, 'r', accuracies, mean_it_pred, 'b', accuracies, mean_it_true, 'g')
+
+        path = self.scene.subpath(name='iterations_for_accuracy')
+        plt.savefig(path)
+        plt.close()
+        self.info('Saved Accuracy/Iterations Plot to %s' % path)
+
 
     #Use matplotlib to make diagram of residuum mean/max vs. iterations with and without guess
     def action_plot_iterations(self):
@@ -236,48 +260,60 @@ class NetworkSimulation(App):
         all_maxima_noguess = []
         all_means_noguess = []
         it = []
-        it_to_plot = 180
-        batch_size = 60
+        it_to_plot = 20
+        batch_size = 100
 
-        batch = self.data_reader[range(100, 100 + batch_size)]
+        perm = np.random.permutation(3000)
+
+        batch = self.data_reader[perm[:batch_size]]
         f_dict = {self.divergence_in.data: batch[0], self.true_pressure.data: batch[1]}
+        f_dict[self.accuracy] = 1e-10  # very high accuracy so it can solve "as long as possible"
 
         self.info('Plot Residuum against Iterations...')
 
-        for i in range(1, it_to_plot):
+        for i in range(0, it_to_plot):
             f_dict[self.max_it] = i# set max_it to current i
 
-            #solve for pressure with and without predicted guess
-            div_in, pressure, pressure_noguess = self.session.run([self.divergence_in, self.p_predGuess, self.p_noGuess], f_dict)
+            if i == 0:
+                #take guess itself for 0th iteration
+                div_in, pressure = self.session.run([self.divergence_in, self.pred_pressure], f_dict)
+                pressure_noguess = DOMAIN.centered_grid(0)
+
+            else:
+                #solve for pressure with and without predicted guess
+                div_in, pressure, pressure_noguess = self.session.run([self.divergence_in, self.p_predGuess, self.p_noGuess], f_dict)
+
             it.extend([i] * batch_size)
 
             #residuum with guess (absolute value)
-            residuum = np.absolute((div_in.data - math.laplace(pressure.data))[:, 1:-1, 1:-1, :])
-            batch_maxima = np.max(residuum, axis=(1,2,3))
-            batch_means = np.mean(residuum, axis=(1,2,3))
+            residuum = math.abs(div_in - pressure.laplace()).data[:, 1:-1, 1:-1, :]
+            batch_maxima = math.max(residuum, axis=(1, 2, 3))
+            batch_means = math.mean(residuum, axis=(1, 2, 3))
 
             #record individual max/mean for scatterplot
             all_maxima.extend(batch_maxima)
             all_means.extend(batch_means)
 
             #record average mean/max over batch for curve plot
-            residuum_max.append(np.mean(batch_maxima))
-            residuum_mean.append(np.mean(batch_means))
+            residuum_max.append(math.mean(batch_maxima))
+            residuum_mean.append(math.mean(batch_means))
 
 
 
 
             # residuum without guess (absolute value)
-            residuum_noguess = np.absolute((div_in.data - math.laplace(pressure_noguess.data))[:, 1:-1, 1:-1, :])
-            batch_maxima_noguess = np.max(residuum_noguess, axis=(1,2,3))
-            batch_means_noguess = np.mean(residuum_noguess, axis=(1,2,3))
+            residuum_noguess = math.abs(div_in - pressure.laplace()).data[:, 1:-1, 1:-1, :]
+            batch_maxima_noguess = math.max(residuum_noguess, axis=(1, 2, 3))
+            batch_means_noguess = math.mean(residuum_noguess, axis=(1, 2, 3))
 
             #record individual max/mean for scatterplot
             all_maxima_noguess.extend(batch_maxima_noguess)
             all_means_noguess.extend(batch_means_noguess)
 
-            residuum_max_noguess.append(np.mean(batch_maxima_noguess))
-            residuum_mean_noguess.append(np.mean(batch_means_noguess))
+            residuum_max_noguess.append(math.mean(batch_maxima_noguess))
+            residuum_mean_noguess.append(math.mean(batch_means_noguess))
+
+            print(i)
 
 
 
@@ -285,10 +321,10 @@ class NetworkSimulation(App):
         plt.ylabel('Residuum Max (Blue: With Guess)')
         plt.yscale('log')
         plt.xlabel('Iterations')
-        plt.plot(range(1, it_to_plot), residuum_max, 'b', range(1, it_to_plot), residuum_max_noguess, 'r')
+        plt.plot(range(0, it_to_plot), residuum_max, 'b', range(0, it_to_plot), residuum_max_noguess, 'r')
 
-        plt.scatter(x=it,y=all_maxima,s=0.01,c=(0,0,1.0),alpha=0.8)
-        plt.scatter(x=it, y=all_maxima_noguess, s=0.01, c=(1.0, 0, 0), alpha=0.8)
+        plt.scatter(x=it,y=all_maxima,s=0.01,c=(0,0,1.0),alpha=0.25)
+        plt.scatter(x=it, y=all_maxima_noguess, s=0.01, c=(1.0, 0, 0), alpha=0.25)
 
         path = self.scene.subpath(name='residuumMax_vs_iterations')
         plt.savefig(path)
@@ -299,10 +335,10 @@ class NetworkSimulation(App):
         plt.ylabel('Residuum Mean (Blue: With Guess)')
         plt.yscale('log')
         plt.xlabel('Iterations')
-        plt.plot(range(1, it_to_plot), residuum_mean, 'b', range(1, it_to_plot), residuum_mean_noguess, 'r')
+        plt.plot(range(0, it_to_plot), residuum_mean, 'b', range(0, it_to_plot), residuum_mean_noguess, 'r')
 
-        plt.scatter(x=it,y=all_means,s=0.01,c=(0,0,1.0),alpha=0.8)
-        plt.scatter(x=it, y=all_means_noguess, s=0.01, c=(1.0, 0, 0), alpha=0.8)
+        plt.scatter(x=it,y=all_means,s=0.01,c=(0,0,1.0),alpha=0.25)
+        plt.scatter(x=it, y=all_means_noguess, s=0.01, c=(1.0, 0, 0), alpha=0.25)
 
         path = self.scene.subpath(name='residuumMean_vs_iterations')
         plt.savefig(path)

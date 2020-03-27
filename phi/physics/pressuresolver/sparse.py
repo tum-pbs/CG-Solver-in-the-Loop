@@ -57,7 +57,7 @@ class SparseCG(PoissonSolver):
             This requires less memory but is only accurate if the solution is fully converged.
         """
         PoissonSolver.__init__(self, 'Sparse Conjugate Gradient', supported_devices=('CPU', 'GPU'), supports_guess=True, supports_loop_counter=True, supports_continuous_masks=True)
-        assert isinstance(accuracy, Number), 'invalid accuracy: %s' % accuracy
+        #assert isinstance(accuracy, Number), 'invalid accuracy: %s' % accuracy
         assert gradient_accuracy == 'same' or isinstance(gradient_accuracy, Number), 'invalid gradient_accuracy: %s' % gradient_accuracy
         assert max_gradient_iterations in ['same', 'mirror'] or isinstance(max_gradient_iterations, Number), 'invalid max_gradient_iterations: %s' % max_gradient_iterations
         self.accuracy = accuracy
