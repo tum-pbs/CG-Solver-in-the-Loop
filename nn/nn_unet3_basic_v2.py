@@ -9,7 +9,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
-DATAPATH = 'data/smoke_closed/'  # has to match DOMAIN
+DATAPATH = 'data/smoke_v2/'  # has to match DOMAIN
 DESCRIPTION = u"""
 Train a neural network to predict the pressure corresponding to the given divergence field.
 The predicted pressure should be able to be fed into a solver, reducing the iterations it needs to converge.
@@ -108,6 +108,13 @@ def it_solver(X):
     return SparseCG(autodiff=True, max_iterations=X, accuracy=1e-3)
 
 
+# Predict pressure using Neural Network
+def predict_pressure(divergence):
+    result = pressure_unet(divergence.data)
+
+    return CenteredGrid(result, divergence.box, name='pressure')
+
+
 class TrainingTest(LearningApp):
 
     def __init__(self):
@@ -121,14 +128,14 @@ class TrainingTest(LearningApp):
 
         # --- Build neural network ---
         with self.model_scope():
-            self.pred_pressure = pred_pressure = pressure_unet(divergence_in.data)#NN Pressure Guess
+            self.pred_pressure = pred_pressure = predict_pressure(divergence_in)#NN Pressure Guess
 
             p_networkPlus10s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=pred_pressure)
             p_Zero10s, _        = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=None)
 
             # Pressure Solves with different Guesses (max iterations as placeholder)
             self.p_predGuess, self.iter_guess = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=pred_pressure)
-            self.p_trueGuess, self.iter_true  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=true_pressure.data)
+            self.p_trueGuess, self.iter_true  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=true_pressure)
             self.p_noGuess,   self.iter_zero  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it), guess=None)
 
         # --- Loss function ---
@@ -137,13 +144,13 @@ class TrainingTest(LearningApp):
 
         # --- Dataset ---
         self.set_data(dict={self.divergence_in.data: 'Divergence', self.true_pressure.data: 'Pressure'},
-                      train=Dataset.load(DATAPATH, range(0, 2799)),
-                      val=Dataset.load(DATAPATH, range(2800, 2999)))
+                      train=Dataset.load(DATAPATH, range(0, 279)),
+                      val=Dataset.load(DATAPATH, range(280, 299)))
 
         # --- GUI ---
-        self.add_field('Divergence', self.divergence_in.data)
+        self.add_field('Divergence', self.divergence_in)
         self.add_field('Predicted Pressure', pred_pressure)
-        self.add_field('True Pressure', self.true_pressure.data)
+        self.add_field('True Pressure', self.true_pressure)
 
         self.save_path = EditableString("Save/Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
 

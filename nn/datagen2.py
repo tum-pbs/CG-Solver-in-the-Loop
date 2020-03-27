@@ -26,7 +26,7 @@ def random_velocity(shape):
 class SmokeDataGen(App):
 
     def __init__(self):
-        App.__init__(self, 'Smoke Data Generation', HOW_TO, base_dir='./data', summary='smoke_closed')
+        App.__init__(self, 'Smoke Data Generation', HOW_TO, base_dir='./data', summary='smoke_v2')
         self.value_frames_per_simulation = 16
 
         self.solver = SparseCG(autodiff=True, max_iterations=500, accuracy=1e-3)
