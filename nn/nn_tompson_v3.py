@@ -106,10 +106,10 @@ def pressure_unet(divergence, scope="pressure_unet"):
 
 # Solver that only solves up to X iterations
 def it_solver(X):
-    return SparseCG(autodiff=True, max_iterations=X, accuracy=1e-3)
+    return SparseCG(autodiff=True, max_iterations=X, accuracy=1e-6)
 
 # Predict pressure using Neural Network
-def predict_pressure(divergence, normalize=True):
+def predict_pressure(divergence, normalize=False):
 
     if normalize:
         #divide input by its standard deviation (normalize)
@@ -155,7 +155,6 @@ class TompsonUnet(LearningApp):
             self.pred_pressure = pred_pressure = predict_pressure(divergence_in)#NN Pressure Guess
 
             p_networkPlus10s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=pred_pressure)
-            p_Zero10s, _        = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=None)
 
             #Tompson loss quantities (û)
             self.v_corrected = correct(self.v_in, DOMAIN.centered_grid(pred_pressure))
@@ -197,115 +196,6 @@ class TompsonUnet(LearningApp):
         self.add_scalar("Iterations (True Guess)", self.iter_true)
         self.add_scalar("Iterations (Zero Guess)", self.iter_zero)
 
-    #print mean iterations with predicted guess as average over validation batch
-    def action_iterations(self):
-        print("Mean Iterations (over validation batch) with current NN prediction as guess:")
-
-        iterations_zero = []
-        iterations_guess = []
-        iterations_true = []
-
-        #Look at each sample individually
-        for i in range(self.validation_batch_size):
-
-            sample = self._val_reader[i]
-            f_dict = self._feed_dict(sample, False)
-
-            #Solve for pressure for this sample using different guesses
-            itZero, itPred, itTrue = self.session.run([self.iter_zero, self.iter_guess, self.iter_true], f_dict)
-
-            iterations_zero.append(itZero)
-            iterations_guess.append(itPred)
-            iterations_true.append(itTrue)
-
-        print("Zero Guess: ", np.mean(iterations_zero))
-        print("Predicted Guess: ", np.mean(iterations_guess))
-        print("True Guess: ", np.mean(iterations_true), "\n")
-
-    #Use matplotlib to make diagram of residuum mean/max vs. iterations with and without guess
-    def action_plot_iterations(self):
-        residuum_max = []
-        residuum_mean = []
-        residuum_max_noguess = []
-        residuum_mean_noguess = []
-
-        all_maxima = []
-        all_means = []
-        all_maxima_noguess = []
-        all_means_noguess = []
-        it = []
-        it_to_plot = 200
-
-        batch = self._val_reader[0:self.validation_batch_size]
-        f_dict = self._feed_dict(batch, False)
-
-        self.info('Plot Residuum against Iterations...')
-
-        for i in range(1, it_to_plot):
-            f_dict[self.max_it] = i# set max_it to current i
-
-            #solve for pressure with and without predicted guess
-            div_in, pressure, pressure_noguess = self.session.run([self.divergence_in, self.p_predGuess, self.p_noGuess], f_dict)
-            it.extend([i] * self.validation_batch_size)
-
-            #residuum with guess (absolute value)
-            residuum = np.absolute((div_in.data - math.laplace(pressure.data))[:, 1:-1, 1:-1, :])
-            batch_maxima = np.max(residuum, axis=(1,2,3))
-            batch_means = np.mean(residuum, axis=(1,2,3))
-
-            #record individual max/mean for scatterplot
-            all_maxima.extend(batch_maxima)
-            all_means.extend(batch_means)
-
-            #record average mean/max over batch for curve plot
-            residuum_max.append(np.mean(batch_maxima))
-            residuum_mean.append(np.mean(batch_means))
-
-
-
-
-            # residuum without guess (absolute value)
-            residuum_noguess = np.absolute((div_in.data - math.laplace(pressure_noguess.data))[:, 1:-1, 1:-1, :])
-            batch_maxima_noguess = np.max(residuum_noguess, axis=(1,2,3))
-            batch_means_noguess = np.mean(residuum_noguess, axis=(1,2,3))
-
-            #record individual max/mean for scatterplot
-            all_maxima_noguess.extend(batch_maxima_noguess)
-            all_means_noguess.extend(batch_means_noguess)
-
-            residuum_max_noguess.append(np.mean(batch_maxima_noguess))
-            residuum_mean_noguess.append(np.mean(batch_means_noguess))
-
-
-
-        #Plot Maximum of Residuum
-        plt.ylabel('Residuum Max (Blue: With Guess)')
-        plt.yscale('log')
-        plt.xlabel('Iterations')
-        plt.plot(range(1, it_to_plot), residuum_max, 'b', range(1, it_to_plot), residuum_max_noguess, 'r')
-
-        plt.scatter(x=it,y=all_maxima,s=0.01,c=(0,0,1.0),alpha=0.8)
-        plt.scatter(x=it, y=all_maxima_noguess, s=0.01, c=(1.0, 0, 0), alpha=0.8)
-
-        path = self.scene.subpath(name='residuumMax_vs_iterations')
-        plt.savefig(path)
-        plt.close()
-        self.info('Saved Residuum Max Plot to %s' % path)
-
-        #Plot Mean of Residuum
-        plt.ylabel('Residuum Mean (Blue: With Guess)')
-        plt.yscale('log')
-        plt.xlabel('Iterations')
-        plt.plot(range(1, it_to_plot), residuum_mean, 'b', range(1, it_to_plot), residuum_mean_noguess, 'r')
-
-        plt.scatter(x=it,y=all_means,s=0.01,c=(0,0,1.0),alpha=0.8)
-        plt.scatter(x=it, y=all_means_noguess, s=0.01, c=(1.0, 0, 0), alpha=0.8)
-
-        path = self.scene.subpath(name='residuumMean_vs_iterations')
-        plt.savefig(path)
-        plt.close()
-        self.info('Saved Residuum Mean Plot to %s' % path)
-
     def action_save_model(self):
         self.session.save(self.save_path)
 
@@ -328,7 +218,6 @@ if len(sys.argv) > 1:
         app.info('Finished Training! (%s steps)' % steps_to_train)
         dir = app.scene.subpath('checkpoint_%08d' % app.steps)
         app.session.save(dir)
-        app.action_plot_iterations()
 
     app.play(max_steps=steps_to_train, callback=on_finish)
 
