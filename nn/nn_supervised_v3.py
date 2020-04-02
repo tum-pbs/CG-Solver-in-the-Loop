@@ -9,16 +9,34 @@ DESCRIPTION = u"""
 Train a neural network to predict the pressure corresponding to the given divergence field.
 The predicted pressure should be able to be fed into a solver, reducing the iterations it needs to converge.
 
-This version recreates the Tompson paper approach by using the predicted pressure to correct the velocity,
-then calculating its divergence as the loss term.
+This version uses a supervised approach, comparing the Network's pressure prediction to a ground truth pressure
+that was pre-calculated by a numeric solver.
 """
 
-def correct(velocity, pressure):
-    gradp = StaggeredGrid.gradient(pressure)
-    return (velocity - gradp)
+def normalize(field):
+
+    # Subtract Mean
+    mean = math.mean(field.data, axis=(1, 2, 3))
+    mean = math.reshape(mean, (-1, 1, 1, 1))  # reshape to broadcast correctly across batch
+    field -= mean
+
+    # Divide by Standard Deviation
+    std = math.std(field.data, axis=(1, 2, 3))
+    std = math.reshape(std, (-1, 1, 1, 1))  # reshape to broadcast correctly across batch
+    field /= std
+
+    return field
+
+def subtract_mean(field):
+    # Subtract Mean
+    mean = math.mean(field.data, axis=(1, 2, 3))
+    mean = math.reshape(mean, (-1, 1, 1, 1))  # reshape to broadcast correctly across batch
+
+    return field - mean
 
 
-class TompsonUnet(LearningApp):
+
+class SupervisedUnet(LearningApp):
 
     def __init__(self):
         LearningApp.__init__(self, 'Training', DESCRIPTION, learning_rate=2e-4, validation_batch_size=16, training_batch_size=32, base_dir="NN_UNet3_Basic", record_data=False)
@@ -28,53 +46,32 @@ class TompsonUnet(LearningApp):
         self.divergence_in = divergence_in = placeholder(DOMAIN.centered_shape(batch_size=None))  # Network Input
         self.true_pressure = true_pressure = placeholder(DOMAIN.centered_shape(batch_size=None))  # Ground Truth
 
-        # Staggered Grids
-        staggered_shape = (None, *(DOMAIN.resolution + 1), DOMAIN.rank)
-
-        v_in_data = tf.placeholder(dtype=tf.float32, shape=staggered_shape)
-        self.v_in = StaggeredGrid(v_in_data)  # Velocity corresponding to Network Input (Divergence)
-
-        v_true_data = tf.placeholder(dtype=tf.float32, shape=staggered_shape)
-        self.v_true = StaggeredGrid(v_true_data)  # Velocity corrected, Ground Truth
-
 
         # --- Build neural network ---
         with self.model_scope():
-            self.pred_pressure = pred_pressure = predict_pressure(divergence_in)#NN Pressure Guess
-
-            p_networkPlus10s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=pred_pressure)
-
-            #Tompson loss quantities (û)
-            self.v_corrected = correct(self.v_in, DOMAIN.centered_grid(pred_pressure))
-            self.v_corrected_true = correct(self.v_in, self.true_pressure)
-
+            self.pred_pressure = pred_pressure = predict_pressure(divergence_in)  # NN Pressure Guess
 
             # Pressure Solves with different Guesses (max iterations as placeholder)
             self.p_predGuess, self.iter_guess = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(500), guess=pred_pressure)
             self.p_trueGuess, self.iter_true  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(500), guess=true_pressure)
             self.p_noGuess,   self.iter_zero  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(500), guess=None)
 
-        # --- Tompson Loss function ---
-        residuum = self.v_corrected.divergence(physical_units=False)
-        div_loss = math.l2_loss(residuum)
-
-        self.add_objective(div_loss, 'Tompson Loss')
+        # --- Supervised Loss function ---
+        supervised_loss = math.l2_loss(self.pred_pressure - subtract_mean(self.true_pressure))
+        self.add_objective(supervised_loss, 'Supervised Loss')
 
         # --- Dataset ---
-        self.set_data(dict={self.divergence_in.data: 'Divergence', self.true_pressure.data: 'Pressure', v_in_data: 'Divergent Velocity', v_true_data: 'Corrected Velocity'},
+        self.set_data(dict={self.divergence_in.data: 'Divergence', self.true_pressure.data: 'Pressure'},
                       train=Dataset.load(DATAPATH, range(0, 2799)),
                       val=Dataset.load(DATAPATH, range(2800, 2999)))
 
         # --- GUI ---
         self.add_field('Divergence', self.divergence_in)
         self.add_field('Predicted Pressure', pred_pressure)
+        self.add_field('Predicted Pressure ( - Mean)', subtract_mean(pred_pressure))
         self.add_field('True Pressure', self.true_pressure)
-        self.add_field('Advected Velocity', self.v_in)
-        self.add_field('Advected Velocity (Divergence)', self.v_in.divergence(physical_units=False))
-        self.add_field('Corrected Velocity (NN)', self.v_corrected)
-        self.add_field('Corrected Velocity (True)', self.v_true)
-        self.add_field('Corrected Velocity (with True Pressure)', self.v_corrected_true)
-        self.add_field('Residuum', residuum)
+        self.add_field('True Pressure (Normalized)', normalize(self.true_pressure))
+        self.add_field('True Pressure ( - Mean)', subtract_mean(self.true_pressure))
 
         self.save_path = EditableString("Save/Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
 
@@ -95,7 +92,7 @@ class TompsonUnet(LearningApp):
 if len(sys.argv) > 1:
     steps_to_train = int(sys.argv[1])
 
-    app = TompsonUnet()
+    app = SupervisedUnet()
     app.prepare()
     app.info('Start Training CNN UNet3 to predict pressure from divergence (unsupervised)!')
     app.info('Loss: Tompson Approach (Divergence of NN-Corrected Velocity)')
