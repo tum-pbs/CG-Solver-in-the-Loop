@@ -9,11 +9,14 @@ import matplotlib.pyplot as plt
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
 DATAPATH = 'data/smoke_v3_test/'  # has to match DOMAIN
+USE_FLOAT64 = True
 DESCRIPTION = u"""
 Simulate random smoke distributions using a trained NN and a normal solver for comparison.
 Left: Simulation using NN as solver         Right: Simulation using numeric solver
 """
 
+np.random.seed(2020)  # fix seed
+perm = np.random.permutation(3000)
 
 def pressure_unet(divergence, scope="pressure_unet"):
     """ Network structure (Based on U-Net) """
@@ -179,10 +182,16 @@ class NetworkSimulation(App):
         with tf.variable_scope('model'):
             self.pred_pressure = predict_pressure(self.divergence_in)  # NN Pressure Guess
 
+            div = math.to_float(self.divergence_in, float64=USE_FLOAT64)
+            p_pred = math.to_float(self.pred_pressure, float64=USE_FLOAT64)
+            p_true = math.to_float(self.true_pressure, float64=USE_FLOAT64)
+            p_zero = math.to_float(self.zero_guess, float64=USE_FLOAT64)
+            acc = math.to_float(self.accuracy, float64=USE_FLOAT64)
+
             # Pressure Solves with different Guesses (max iterations as placeholder)
-            self.p_predGuess, self.iter_guess = solve_pressure(self.divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it, acc=self.accuracy), guess=self.pred_pressure)
-            self.p_trueGuess, self.iter_true = solve_pressure(self.divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it, acc=self.accuracy), guess=self.true_pressure)
-            self.p_noGuess, self.iter_zero = solve_pressure(self.divergence_in, DOMAIN, pressure_solver=it_solver(self.max_it, acc=self.accuracy), guess=self.zero_guess)
+            self.p_predGuess, self.iter_guess = solve_pressure(div, DOMAIN, pressure_solver=it_solver(self.max_it, acc), guess=p_pred)
+            self.p_trueGuess, self.iter_true = solve_pressure(div, DOMAIN, pressure_solver=it_solver(self.max_it, acc), guess=p_true)
+            self.p_noGuess, self.iter_zero = solve_pressure(div, DOMAIN, pressure_solver=it_solver(self.max_it, acc), guess=p_zero)
 
         # --- GUI ---
         self.value_frames_per_simulation = 100
@@ -206,7 +215,7 @@ class NetworkSimulation(App):
     def action_plot_accuracy(self):
         self.info('Plot iterations for accuracies...')
 
-        perm = np.random.permutation(3000)[:100]
+        batch = perm[:100]
         accuracies = (1e-1, 0.5e-1, 1e-2, 0.5e-2, 1e-3, 0.5e-3, 1e-4, 0.5e-4, 1e-5, 0.5e-5, 1e-6)
 
         mean_it_zero = []
@@ -221,7 +230,7 @@ class NetworkSimulation(App):
             self.info('Calculating for %s...' % accuracy)
 
             # Look at each sample individually
-            for i in perm:
+            for i in batch:
                 sample = self.data_reader[int(i)]
                 zero = np.zeros_like(sample[0])
 
@@ -265,6 +274,33 @@ class NetworkSimulation(App):
         plt.close()
         self.info('Saved Accuracy/Iterations Plot to %s' % path)
 
+    def action_save_guess_images(self):
+
+        self.info('Generate Pressure Guess Image...')
+
+        batch_size = 5
+        batch = self.data_reader[perm[:batch_size]]
+        f_dict = {self.divergence_in.data: batch[0], self.true_pressure: batch[1]}
+
+        pressure = self.session.run(self.pred_pressure, feed_dict=f_dict)
+        p = pressure.data
+        p_true = batch[1]
+
+        for i in range(batch_size):
+            p_image = np.reshape(p[i], DOMAIN.resolution)
+            p_true_image = np.reshape(p_true[i], DOMAIN.resolution)
+
+            plt.imshow(p_image, cmap='bwr', origin='lower')
+            path = self.scene.subpath(name='pressure_nn_%s' % i)
+            plt.savefig(path)
+            plt.close()
+
+            plt.imshow(p_true_image, cmap='bwr', origin='lower')
+            path = self.scene.subpath(name='pressure_true_%s' % i)
+            plt.savefig(path)
+            plt.close()
+
+        self.info('Saved Pressure Guess Image to %s' % path)
 
     #Use matplotlib to make diagram of residuum mean/max vs. iterations with and without guess
     def action_plot_iterations(self):
@@ -280,8 +316,6 @@ class NetworkSimulation(App):
         it = []
         it_to_plot = 200
         batch_size = 100
-
-        perm = np.random.permutation(3000)
 
         batch = self.data_reader[perm[:batch_size]]
         zero = np.zeros_like(batch[0])

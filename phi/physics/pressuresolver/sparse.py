@@ -58,6 +58,7 @@ class SparseCG(PoissonSolver):
         """
         PoissonSolver.__init__(self, 'Sparse Conjugate Gradient', supported_devices=('CPU', 'GPU'), supports_guess=True, supports_loop_counter=True, supports_continuous_masks=True)
         #assert isinstance(accuracy, Number), 'invalid accuracy: %s' % accuracy
+        assert math.is_tensor(accuracy), 'invalid accuracy: %s' % accuracy
         assert gradient_accuracy == 'same' or isinstance(gradient_accuracy, Number), 'invalid gradient_accuracy: %s' % gradient_accuracy
         assert max_gradient_iterations in ['same', 'mirror'] or isinstance(max_gradient_iterations, Number), 'invalid max_gradient_iterations: %s' % max_gradient_iterations
         self.accuracy = accuracy
@@ -85,7 +86,9 @@ class SparseCG(PoissonSolver):
         else:
             sidx, sorting = sparse_indices(dimensions, periodic)
             sval_data = sparse_values(dimensions, active_mask, fluid_mask, sorting, periodic)
-            A = math.choose_backend(field).sparse_tensor(indices=sidx, values=sval_data, shape=[N, N])
+            backend = math.choose_backend(field)
+            sval_data = backend.cast(sval_data, field.dtype)
+            A = backend.sparse_tensor(indices=sidx, values=sval_data, shape=[N, N])
 
         if self.autodiff:
             return sparse_cg(field, A, self.max_iterations, guess, self.accuracy, back_prop=True)
