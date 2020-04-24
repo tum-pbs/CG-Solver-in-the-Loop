@@ -5,6 +5,8 @@ from nn_architecture import *
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+import pickle
+
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
 DATAPATH = 'data/smoke_v3_test/'  # has to match DOMAIN
 USE_FLOAT64 = True
@@ -89,14 +91,15 @@ class NetworkSimulation(App):
         self.add_field('Pressure', lambda: self.smoke.solve_info.get('pressure', None))
         self.add_field('Pressure NN', lambda: self.smoke_nn.solve_info.get('pressure', None))
 
-        self.save_path = EditableString("Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
+        self.save_path = EditableString("Model Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
+        self.plot_path = EditableString("Plot Data Path", self.scene.path)
         # self.save_path = EditableString("Load Path", 'NN_Unet3_Basic/nn_closed_borders/checkpoint_00300000')
 
     def action_load_model(self):
         self.session.restore(self.save_path, scope='model')
 
-    def action_plot_accuracy(self):
-        self.info('Plot iterations for accuracies...')
+    def action_calculate_iterations_plot(self):
+        self.info('Calculate Accuracy/Iterations Plot Data...')
 
         batch = perm[:100]
         accuracies = (1e-1, 0.5e-1, 1e-2, 0.5e-2, 1e-3, 0.5e-3, 1e-4, 0.5e-4, 1e-5, 0.5e-5, 1e-6)
@@ -130,32 +133,20 @@ class NetworkSimulation(App):
             mean_it_true.append(math.mean(iterations_true))
             mean_it_pred.append(math.mean(iterations_guess))
 
-        self.info('Finished calculation, plotting...')
+        # Save Calculated data to disk for later plotting
+        with open(self.plot_path + '/model_iter.data', 'wb') as file:
+            pickle.dump(mean_it_pred, file)
 
-        #Plot Maximum of Residuum
-        plt.ylabel('Iterations')
+        with open(self.plot_path + '/zeroguess_iter.data', 'wb') as file:
+            pickle.dump(mean_it_zero, file)
 
-        fig, ax = plt.subplots()
-        width = 0.25
-        x = np.arange(len(accuracies))
+        with open(self.plot_path + '/trueguess_iter.data', 'wb') as file:
+            pickle.dump(mean_it_true, file)
 
-        rects1 = ax.bar(x - width, mean_it_zero, width, label='Zero Guess', color='red')
-        rects2 = ax.bar(x, mean_it_pred, width, label='Predicted Guess', color='blue')
-        rects2 = ax.bar(x + width, mean_it_true, width, label='True Guess', color='green')
+        with open(self.plot_path + '/acc.data', 'wb') as file:
+            pickle.dump(accuracies, file)
 
-        ax.set_xticks(x)
-        ax.set_xticklabels(accuracies)
-        ax.set_ylabel('Iterations')
-        ax.set_title('Iterations needed to achieve target Accuracy')
-
-        ax.legend()
-        fig.tight_layout()
-
-
-        path = self.scene.subpath(name='iterations_for_accuracy')
-        plt.savefig(path)
-        plt.close()
-        self.info('Saved Accuracy/Iterations Plot to %s' % path)
+        self.info('Finished calculation, saved plot data to %s' % self.plot_path)
 
     def action_save_guess_images(self):
 
@@ -186,7 +177,7 @@ class NetworkSimulation(App):
         self.info('Saved Pressure Guess images to %s' % path)
 
     #Use matplotlib to make diagram of residuum mean/max vs. iterations with and without guess
-    def action_plot_iterations(self):
+    def action_calculate_residuum_plot(self):
         residuum_max = []
         residuum_mean = []
         residuum_max_noguess = []
@@ -206,7 +197,7 @@ class NetworkSimulation(App):
         f_dict = {self.divergence_in.data: batch[0], self.true_pressure.data: batch[1], self.zero_guess.data: zero}
         f_dict[self.accuracy] = 1e-12  # very high accuracy so it can solve "as long as possible"
 
-        self.info('Plot Residuum against Iterations...')
+        self.info('Calculate Residuum Plot data...')
 
         for i in range(0, it_to_plot):
             f_dict[self.max_it] = i# set max_it to current i
@@ -252,35 +243,28 @@ class NetworkSimulation(App):
 
             print(i)
 
+        # Save Calculated data to disk for later plotting
+        with open(self.plot_path + '/model_resmax.data', 'wb') as file:
+            pickle.dump([range(0, it_to_plot), residuum_max], file)
+
+        with open(self.plot_path + '/model_resmean.data', 'wb') as file:
+            pickle.dump([range(0, it_to_plot), residuum_mean], file)
+
+        with open(self.plot_path + '/model_points.data', 'wb') as file:
+            pickle.dump([it, all_means, all_maxima], file)
 
 
-        #Plot Maximum of Residuum
-        plt.ylabel('Residuum Max (Blue: With Guess)')
-        plt.yscale('log')
-        plt.xlabel('Iterations')
-        plt.plot(range(0, it_to_plot), residuum_max, 'b', range(0, it_to_plot), residuum_max_noguess, 'r')
+        with open(self.plot_path + '/zeroguess_resmax.data', 'wb') as file:
+            pickle.dump([range(0, it_to_plot), residuum_max_noguess], file)
 
-        plt.scatter(x=it,y=all_maxima,s=0.01,c=(0,0,1.0),alpha=0.25)
-        plt.scatter(x=it, y=all_maxima_noguess, s=0.01, c=(1.0, 0, 0), alpha=0.25)
+        with open(self.plot_path + '/zeroguess_resmean.data', 'wb') as file:
+            pickle.dump([range(0, it_to_plot), residuum_mean_noguess], file)
 
-        path = self.scene.subpath(name='residuumMax_vs_iterations')
-        plt.savefig(path)
-        plt.close()
-        self.info('Saved Residuum Max Plot to %s' % path)
+        with open(self.plot_path + '/zeroguess_points.data', 'wb') as file:
+            pickle.dump([it, all_means_noguess, all_maxima_noguess], file)
 
-        #Plot Mean of Residuum
-        plt.ylabel('Residuum Mean (Blue: With Guess)')
-        plt.yscale('log')
-        plt.xlabel('Iterations')
-        plt.plot(range(0, it_to_plot), residuum_mean, 'b', range(0, it_to_plot), residuum_mean_noguess, 'r')
 
-        plt.scatter(x=it,y=all_means,s=0.01,c=(0,0,1.0),alpha=0.25)
-        plt.scatter(x=it, y=all_means_noguess, s=0.01, c=(1.0, 0, 0), alpha=0.25)
-
-        path = self.scene.subpath(name='residuumMean_vs_iterations')
-        plt.savefig(path)
-        plt.close()
-        self.info('Saved Residuum Mean Plot to %s' % path)
+        self.info('Finished calculation, saved plot data to %s' % self.plot_path)
 
     def step(self):
         if self.steps >= self.value_frames_per_simulation:
