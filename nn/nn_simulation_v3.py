@@ -152,7 +152,7 @@ class NetworkSimulation(App):
 
         self.info('Generate Pressure Guess Image...')
 
-        batch_size = 5
+        batch_size = 20
         batch = self.data_reader[perm[:batch_size]]
         f_dict = {self.divergence_in.data: batch[0], self.true_pressure: batch[1]}
 
@@ -160,20 +160,28 @@ class NetworkSimulation(App):
         p = pressure.data
         p_true = batch[1]
 
+        model_images = []
+        true_images = []
+
         for i in range(batch_size):
             p_image = np.reshape(p[i], DOMAIN.resolution)
             p_true_image = np.reshape(p_true[i], DOMAIN.resolution)
 
+            model_images.append(p_image)
+            true_images.append(p_true_image)
+
             plt.imshow(p_image, cmap='bwr', origin='lower')
             path = self.scene.subpath(name='pressure_nn_%s' % i)
-            plt.savefig(path)
+            plt.savefig(path, dpi=200)
             plt.close()
 
             plt.imshow(p_true_image, cmap='bwr', origin='lower')
             path = self.scene.subpath(name='pressure_true_%s' % i)
-            plt.savefig(path)
+            plt.savefig(path, dpi=200)
             plt.close()
 
+        np.save(self.plot_path + "/model_images", arr=model_images)
+        np.save(self.plot_path + "/true_images", arr=true_images)
         self.info('Saved Pressure Guess images to %s' % path)
 
     #Use matplotlib to make diagram of residuum mean/max vs. iterations with and without guess
