@@ -22,11 +22,11 @@ def random_velocity(shape):
 class SmokeDataGen(App):
 
     def __init__(self):
-        App.__init__(self, 'Smoke Data Generation', HOW_TO, base_dir='./data', summary='smoke_v3_highaccuracy')
+        App.__init__(self, 'Smoke Data Generation', HOW_TO, base_dir='./data', summary='smoke_v3')
         self.value_frames_per_simulation = frames_per_sim
 
-        self.solver = SparseCG(autodiff=True, max_iterations=500, accuracy=1e-6)
-        self.domain = Domain([64, 64], boundaries=CLOSED)
+        self.solver = SparseCG(autodiff=True, max_iterations=500, accuracy=1e-3)
+        self.domain = Domain([64, 64], boundaries=OPEN)
         self.smoke = world.add(Fluid(self.domain, density=random_density, velocity=random_velocity, batch_size=world.batch_size, buoyancy_factor=0.1), physics=IncompressibleFlow(pressure_solver=self.solver))
 
         # --- GUI ---
