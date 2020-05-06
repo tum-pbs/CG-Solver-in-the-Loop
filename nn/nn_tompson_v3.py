@@ -13,8 +13,18 @@ This version recreates the Tompson paper approach by using the predicted pressur
 then calculating its divergence as the loss term.
 """
 
-def correct(velocity, pressure):
+def correct(velocity, pressure, domain):
+
+    # set up fluiddomain with boundary conditions
+    active_mask = math.ones(domain.centered_shape(name='active', extrapolation='constant'))
+    accessible_mask = active_mask.copied_with(extrapolation=Material.accessible_extrapolation_mode(domain.boundaries))
+    fluiddomain = FluidDomain(domain, active=active_mask, accessible=accessible_mask)
+
+    # apply boundary conditions
     gradp = StaggeredGrid.gradient(pressure)
+    gradp = fluiddomain.with_hard_boundary_conditions(gradp)
+
+    # correct and return
     return (velocity - gradp)
 
 
@@ -45,8 +55,8 @@ class TompsonUnet(LearningApp):
             p_networkPlus10s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=pred_pressure)
 
             #Tompson loss quantities (û)
-            self.v_corrected = correct(self.v_in, DOMAIN.centered_grid(pred_pressure))
-            self.v_corrected_true = correct(self.v_in, self.true_pressure)
+            self.v_corrected = correct(self.v_in, DOMAIN.centered_grid(pred_pressure), DOMAIN)
+            self.v_corrected_true = correct(self.v_in, self.true_pressure, DOMAIN)
 
 
             # Pressure Solves with different Guesses (max iterations as placeholder)
