@@ -2,6 +2,7 @@
 from nn_architecture import *
 import sys
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '4'
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
 DATAPATH = 'data/smoke_v3_highaccuracy/'  # has to match DOMAIN
