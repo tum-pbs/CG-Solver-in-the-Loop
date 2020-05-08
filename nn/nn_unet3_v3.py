@@ -28,6 +28,10 @@ class SolverAssistedUnet(LearningApp):
             self.pred_pressure = pred_pressure = predict_pressure(divergence_in)#NN Pressure Guess
 
             p_networkPlus10s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=pred_pressure)
+            p_networkPlus1s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(1), guess=pred_pressure)
+            p_networkPlus2s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(2), guess=pred_pressure)
+            p_networkPlus5s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(5), guess=pred_pressure)
+            p_networkPlus15s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(15), guess=pred_pressure)
 
             # Pressure Solves with different Guesses (max iterations as placeholder)
             self.p_predGuess, self.iter_guess = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(500), guess=pred_pressure)
@@ -35,7 +39,7 @@ class SolverAssistedUnet(LearningApp):
             self.p_noGuess,   self.iter_zero  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(500), guess=None)
 
         # --- Loss function ---
-        loss = math.l2_loss(p_networkPlus10s - pred_pressure)
+        loss = math.l2_loss(p_networkPlus15s - pred_pressure)
         self.add_objective(loss, 'Solver-Based Loss')
 
         # --- Dataset ---
