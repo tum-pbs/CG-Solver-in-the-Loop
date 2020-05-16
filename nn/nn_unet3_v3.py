@@ -2,7 +2,7 @@
 from nn_architecture import *
 import sys
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
 DATAPATH = 'data/smoke_v3_highaccuracy/'  # has to match DOMAIN
@@ -41,7 +41,7 @@ class SolverAssistedUnet(LearningApp):
             self.p_noGuess,   self.iter_zero  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(500), guess=None)
 
         # --- Loss function ---
-        loss = math.l2_loss(p_networkPlus2s - pred_pressure)
+        loss = math.l2_loss(p_networkPlus1s - pred_pressure)
         self.add_objective(loss, 'Solver-Based Loss')
 
         # --- Dataset ---
