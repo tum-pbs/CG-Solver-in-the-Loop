@@ -2,10 +2,15 @@
 from phi.tf.flow import *
 from phi.math import upsample2x
 
-def pressure_unet(divergence, scope="pressure_unet"):
+def pressure_unet(divergence, geometry_mask=None, scope="pressure_unet"):
     """ Network structure (Based on U-Net) """
     with tf.variable_scope(scope):
+
         x = divergence
+
+        if geometry_mask is not None:
+            g_mask = tf.broadcast_to(geometry_mask, tf.shape(x))  # broadcast same mask across batch
+            x = tf.concat([x, g_mask], axis=3)  # concatenate mask to divergence
 
         print(x.shape)
 
@@ -14,7 +19,6 @@ def pressure_unet(divergence, scope="pressure_unet"):
                               reuse=tf.AUTO_REUSE)
         c2 = tf.layers.conv2d(c1, 4, 5, strides=1, activation=tf.nn.relu, padding="same", name="conv2", trainable=True,
                               reuse=tf.AUTO_REUSE)
-
         c3 = tf.layers.conv2d(c2, 4, 5, strides=2, activation=tf.nn.relu, padding="same", name="conv3", trainable=True,
                               reuse=tf.AUTO_REUSE)
 
@@ -86,10 +90,12 @@ def pressure_unet(divergence, scope="pressure_unet"):
         out = tf.layers.conv2d(uc9, 1, 5, strides=1, activation=None, padding="same", name="out_conv", trainable=True,
                                reuse=tf.AUTO_REUSE)
 
+        print(out.shape)
+
         return out
 
 # Predict pressure using Neural Network
-def predict_pressure(divergence, normalize=True):
+def predict_pressure(divergence, geometry_mask=None, normalize=True):
 
     if normalize:
         #mean = math.mean(divergence.data, axis=(1, 2, 3))
@@ -100,9 +106,9 @@ def predict_pressure(divergence, normalize=True):
         s = math.reshape(s, (-1, 1, 1, 1)) # reshape to broadcast correctly across batch
 
         #multiply output by same factor (de-normalize)
-        result = s * pressure_unet(divergence.data / s)
+        result = s * pressure_unet(divergence.data / s, geometry_mask)
     else:
-        result = pressure_unet(divergence.data)
+        result = pressure_unet(divergence.data, geometry_mask)
 
     return CenteredGrid(result, divergence.box, name='pressure')
 

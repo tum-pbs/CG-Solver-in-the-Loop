@@ -2,10 +2,10 @@
 from nn_architecture import *
 import sys
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '4'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
-DATAPATH = 'data/smoke_v3_highaccuracy/'  # has to match DOMAIN
+DATAPATH = 'data/smoke_v3_test/'  # has to match DOMAIN
 DESCRIPTION = u"""
 Train a neural network to predict the pressure corresponding to the given divergence field.
 The predicted pressure should be able to be fed into a solver, reducing the iterations it needs to converge.
@@ -19,6 +19,7 @@ def correct(velocity, pressure, domain):
     # set up fluiddomain with boundary conditions
     active_mask = math.ones(domain.centered_shape(name='active', extrapolation='constant'))
     accessible_mask = active_mask.copied_with(extrapolation=Material.accessible_extrapolation_mode(domain.boundaries))
+
     fluiddomain = FluidDomain(domain, active=active_mask, accessible=accessible_mask)
 
     # apply boundary conditions
@@ -39,6 +40,13 @@ class TompsonUnet(LearningApp):
         self.divergence_in = divergence_in = placeholder(DOMAIN.centered_shape(batch_size=None))  # Network Input
         self.true_pressure = true_pressure = placeholder(DOMAIN.centered_shape(batch_size=None))  # Ground Truth
 
+        # create a geometry mask that is 0: at the border and 1: everywhere else
+        g_mask = math.ones(DOMAIN.centered_shape())
+        g_mask.data[:, 0, :, :] = 0
+        g_mask.data[:, :, 0, :] = 0
+        g_mask.data[:, :, -1, :] = 0
+        g_mask.data[:, -1, :, :] = 0
+
         # Staggered Grids
         staggered_shape = (None, *(DOMAIN.resolution + 1), DOMAIN.rank)
 
@@ -51,9 +59,7 @@ class TompsonUnet(LearningApp):
 
         # --- Build neural network ---
         with self.model_scope():
-            self.pred_pressure = pred_pressure = predict_pressure(divergence_in)#NN Pressure Guess
-
-            p_networkPlus10s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=pred_pressure)
+            self.pred_pressure = pred_pressure = predict_pressure(divergence_in, g_mask.data)  # NN Pressure Guess
 
             #Tompson loss quantities (û)
             self.v_corrected = correct(self.v_in, DOMAIN.centered_grid(pred_pressure), DOMAIN)
@@ -86,6 +92,8 @@ class TompsonUnet(LearningApp):
         self.add_field('Corrected Velocity (True)', self.v_true)
         self.add_field('Corrected Velocity (with True Pressure)', self.v_corrected_true)
         self.add_field('Residuum', residuum)
+
+        self.add_field('Geometry Mask', g_mask)
 
         self.save_path = EditableString("Save/Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
 

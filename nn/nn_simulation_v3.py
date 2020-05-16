@@ -36,7 +36,7 @@ class NNPoissonSolver(PoissonSolver):
     def solve(self, field, domain, guess):
         with tf.variable_scope('model'):
 
-            result = predict_pressure(CenteredGrid(field), self.normalizeInput)
+            result = predict_pressure(CenteredGrid(field), normalize=self.normalizeInput)
             return result.data, None
 
 
@@ -87,6 +87,7 @@ class NetworkSimulation(App):
 
         self.add_field('Residuum', lambda: self.smoke.velocity.divergence())
         self.add_field('Residuum NN', lambda: self.smoke_nn.velocity.divergence())
+        self.add_field('Residuum NN (no border)', lambda: self.smoke_nn.velocity.divergence().data[:, 1:-1, 1:-1, :])
 
         self.add_field('Pressure', lambda: self.smoke.solve_info.get('pressure', None))
         self.add_field('Pressure NN', lambda: self.smoke_nn.solve_info.get('pressure', None))
@@ -156,27 +157,38 @@ class NetworkSimulation(App):
         batch = self.data_reader[perm[:batch_size]]
         f_dict = {self.divergence_in.data: batch[0], self.true_pressure: batch[1]}
 
-        pressure = self.session.run(self.pred_pressure, feed_dict=f_dict)
-        p = pressure.data
+        div, p_pred = self.session.run([self.divergence_in, self.pred_pressure], feed_dict=f_dict)
+        p = p_pred.data
         p_true = batch[1]
+
+        #res = math.abs(div - p_pred.laplace()).data[:, 1:-1, 1:-1, :]
+        res = math.abs(div - p_pred.laplace()).data
 
         model_images = []
         true_images = []
 
         for i in range(batch_size):
             p_image = np.reshape(p[i], DOMAIN.resolution)
+            #p_image = p_image - np.mean(p_image)
             p_true_image = np.reshape(p_true[i], DOMAIN.resolution)
+            #residuum = np.reshape(res[i], DOMAIN.resolution - [2, 2])
+            residuum = np.reshape(res[i], DOMAIN.resolution)
 
             model_images.append(p_image)
             true_images.append(p_true_image)
 
-            plt.imshow(p_image, cmap='bwr', origin='lower')
+            plt.imshow(p_image, vmin=-10.0, vmax=10.0, cmap='bwr', origin='lower')
             path = self.scene.subpath(name='pressure_nn_%s' % i)
             plt.savefig(path, dpi=200)
             plt.close()
 
-            plt.imshow(p_true_image, cmap='bwr', origin='lower')
+            plt.imshow(p_true_image, vmin=-10.0, vmax=10.0, cmap='bwr', origin='lower')
             path = self.scene.subpath(name='pressure_true_%s' % i)
+            plt.savefig(path, dpi=200)
+            plt.close()
+
+            plt.imshow(residuum, cmap='bwr', origin='lower')
+            path = self.scene.subpath(name='residuum_nn_%s' % i)
             plt.savefig(path, dpi=200)
             plt.close()
 
@@ -273,6 +285,21 @@ class NetworkSimulation(App):
 
 
         self.info('Finished calculation, saved plot data to %s' % self.plot_path)
+
+    def action_debug_solve(self):
+
+        batch = self.data_reader[perm[:1]]
+
+        f_dict = {self.divergence_in.data: batch[0], self.true_pressure.data: batch[1]}
+        div, p_pred = self.session.run([self.divergence_in, self.pred_pressure], f_dict)
+
+        res = math.abs(div - p_pred.laplace()).data[:, 1:-1, 1:-1, :]
+        res_full = math.abs(div - p_pred.laplace()).data
+
+        pressure, it = solve_pressure(div, DOMAIN, pressure_solver=it_solver(500, 1e-3), guess=p_pred)
+
+        print("hurp durp")
+
 
     def step(self):
         if self.steps >= self.value_frames_per_simulation:
