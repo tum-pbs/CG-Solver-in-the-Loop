@@ -2,10 +2,10 @@
 from nn_architecture import *
 import sys
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = '7'
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
-DATAPATH = 'data/smoke_v3_highaccuracy/'  # has to match DOMAIN
+DATAPATH = 'data/smoke_v3_test/'  # has to match DOMAIN
 DESCRIPTION = u"""
 Train a neural network to predict the pressure corresponding to the given divergence field.
 The predicted pressure should be able to be fed into a solver, reducing the iterations it needs to converge.
@@ -13,6 +13,7 @@ The predicted pressure should be able to be fed into a solver, reducing the iter
 This version recreates the Tompson paper approach by using the predicted pressure to correct the velocity,
 then calculating its divergence as the loss term.
 """
+
 
 def correct(velocity, pressure, domain):
 
@@ -40,13 +41,6 @@ class TompsonUnet(LearningApp):
         self.divergence_in = divergence_in = placeholder(DOMAIN.centered_shape(batch_size=None))  # Network Input
         self.true_pressure = true_pressure = placeholder(DOMAIN.centered_shape(batch_size=None))  # Ground Truth
 
-        # create a geometry mask that is 0: at the border and 1: everywhere else
-        g_mask = math.ones(DOMAIN.centered_shape())
-        g_mask.data[:, 0, :, :] = 0
-        g_mask.data[:, :, 0, :] = 0
-        g_mask.data[:, :, -1, :] = 0
-        g_mask.data[:, -1, :, :] = 0
-
         # Staggered Grids
         staggered_shape = (None, *(DOMAIN.resolution + 1), DOMAIN.rank)
 
@@ -59,7 +53,7 @@ class TompsonUnet(LearningApp):
 
         # --- Build neural network ---
         with self.model_scope():
-            self.pred_pressure = pred_pressure = predict_pressure(divergence_in, g_mask.data)  # NN Pressure Guess
+            self.pred_pressure = pred_pressure = predict_pressure(divergence_in)  # NN Pressure Guess
 
             #Tompson loss quantities (û)
             self.v_corrected = correct(self.v_in, DOMAIN.centered_grid(pred_pressure), DOMAIN)
@@ -72,8 +66,11 @@ class TompsonUnet(LearningApp):
             self.p_noGuess,   self.iter_zero  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(500), guess=None)
 
         # --- Tompson Loss function ---
+        sdf = SDF(DOMAIN)
+        w = math.maximum(1, 2 - sdf)
+
         residuum = self.v_corrected.divergence(physical_units=False)
-        div_loss = math.l2_loss(residuum)
+        div_loss = math.l2_loss(w * residuum)
 
         self.add_objective(div_loss, 'Tompson Loss')
 
@@ -92,8 +89,6 @@ class TompsonUnet(LearningApp):
         self.add_field('Corrected Velocity (True)', self.v_true)
         self.add_field('Corrected Velocity (with True Pressure)', self.v_corrected_true)
         self.add_field('Residuum', residuum)
-
-        self.add_field('Geometry Mask', g_mask)
 
         self.save_path = EditableString("Save/Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
 

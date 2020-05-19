@@ -115,3 +115,16 @@ def predict_pressure(divergence, geometry_mask=None, normalize=True):
 # Solver that only solves up to X iterations
 def it_solver(X, acc=1e-3):
     return SparseCG(autodiff=True, max_iterations=X, accuracy=acc)
+
+#Compute a basic Signed distance field to the domain borders
+def SDF(domain):
+    sdf = math.ones(domain.centered_shape())
+
+    for y in range(domain.resolution[1]):
+        for x in range(domain.resolution[0]):
+            xmin = math.minimum(domain.resolution[0] - x, x)
+            ymin = math.minimum(domain.resolution[1] - y, y)
+
+            sdf.data[:, x, y, :] = math.minimum(xmin, ymin)
+
+    return sdf / math.max(sdf.data, axis=(1, 2, 3))
