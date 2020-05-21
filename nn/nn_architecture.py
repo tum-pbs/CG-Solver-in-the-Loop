@@ -127,4 +127,4 @@ def SDF(domain):
 
             sdf.data[:, x, y, :] = math.minimum(xmin, ymin)
 
-    return sdf / math.max(sdf.data, axis=(1, 2, 3))
+    return sdf

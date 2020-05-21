@@ -2,7 +2,7 @@
 from nn_architecture import *
 import sys
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '7'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
 DATAPATH = 'data/smoke_v3_highaccuracy/'  # has to match DOMAIN
@@ -67,7 +67,7 @@ class TompsonUnet(LearningApp):
 
         # --- Tompson Loss function ---
         sdf = SDF(DOMAIN)
-        w = math.maximum(1, 2 - sdf)
+        w = math.maximum(1, 32.0 - sdf)
 
         residuum = self.v_corrected.divergence(physical_units=False)
         div_loss = math.l2_loss(w * residuum)
