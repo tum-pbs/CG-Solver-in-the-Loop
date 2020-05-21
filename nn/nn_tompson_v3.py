@@ -2,7 +2,7 @@
 from nn_architecture import *
 import sys
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '3'
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
 DATAPATH = 'data/smoke_v3_highaccuracy/'  # has to match DOMAIN
@@ -66,8 +66,12 @@ class TompsonUnet(LearningApp):
             self.p_noGuess,   self.iter_zero  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(500), guess=None)
 
         # --- Tompson Loss function ---
-        sdf = SDF(DOMAIN)
-        w = math.maximum(1, 32.0 - sdf)
+        # create a weight mask that is 10: at the border and 1: everywhere else
+        w = math.ones(DOMAIN.centered_shape())
+        w.data[:, 0, :, :] = 10.0
+        w.data[:, :, 0, :] = 10.0
+        w.data[:, :, -1, :] = 10.0
+        w.data[:, -1, :, :] = 10.0
 
         residuum = self.v_corrected.divergence(physical_units=False)
         div_loss = math.l2_loss(w * residuum)
@@ -89,6 +93,8 @@ class TompsonUnet(LearningApp):
         self.add_field('Corrected Velocity (True)', self.v_true)
         self.add_field('Corrected Velocity (with True Pressure)', self.v_corrected_true)
         self.add_field('Residuum', residuum)
+
+        self.add_field('Weight Mask', w)
 
         self.save_path = EditableString("Save/Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
 
