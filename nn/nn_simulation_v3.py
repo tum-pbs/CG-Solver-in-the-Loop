@@ -18,6 +18,14 @@ Left: Simulation using NN as solver         Right: Simulation using numeric solv
 np.random.seed(2020)  # fix seed
 perm = np.random.permutation(3000)
 
+# create a geometry mask that is 0: at the border and 1: everywhere else
+g_mask = math.ones(DOMAIN.centered_shape())
+g_mask.data[:, 0, :, :] = 0
+g_mask.data[:, :, 0, :] = 0
+g_mask.data[:, :, -1, :] = 0
+g_mask.data[:, -1, :, :] = 0
+
+
 def random_density(shape):
     return math.maximum(0, math.randfreq(shape, power=32))
 
@@ -88,6 +96,8 @@ class NetworkSimulation(App):
         self.add_field('Residuum', lambda: self.smoke.velocity.divergence())
         self.add_field('Residuum NN', lambda: self.smoke_nn.velocity.divergence())
         self.add_field('Residuum NN (no border)', lambda: self.smoke_nn.velocity.divergence().data[:, 1:-1, 1:-1, :])
+
+        self.add_field('SDF', lambda: SDF(DOMAIN))
 
         self.add_field('Pressure', lambda: self.smoke.solve_info.get('pressure', None))
         self.add_field('Pressure NN', lambda: self.smoke_nn.solve_info.get('pressure', None))
@@ -235,6 +245,7 @@ class NetworkSimulation(App):
 
             #residuum with guess (absolute value)
             residuum = math.abs(div_in - pressure.laplace()).data[:, 1:-1, 1:-1, :]
+            #residuum = math.abs(div_in - pressure.laplace()).data
             batch_maxima = math.max(residuum, axis=(1, 2, 3))
             batch_means = math.mean(residuum, axis=(1, 2, 3))
 
@@ -251,6 +262,7 @@ class NetworkSimulation(App):
 
             # residuum without guess (absolute value)
             residuum_noguess = math.abs(div_in - pressure_noguess.laplace()).data[:, 1:-1, 1:-1, :]
+            residuum_noguess = math.abs(div_in - pressure_noguess.laplace()).data
             batch_maxima_noguess = math.max(residuum_noguess, axis=(1, 2, 3))
             batch_means_noguess = math.mean(residuum_noguess, axis=(1, 2, 3))
 

@@ -46,7 +46,7 @@ def plot_iterations(to_plot, labels, plot_dir="iter_plot/"):
     plt.close()
     print('Saved Accuracy/Iterations Plot to %s' % path)
 
-def plot_residuum(to_plot, labels, plot_dir="residuum_plot/"):
+def plot_residuum(to_plot, labels, cropped=True, plot_dir="residuum_plot/"):
 
     # --- Load Data ---
     resmax = {}
@@ -54,13 +54,18 @@ def plot_residuum(to_plot, labels, plot_dir="residuum_plot/"):
     pointdata = {}
 
     for name in to_plot:
-        with open(plot_dir + name + '_resmax.data', 'rb') as file:
+        prefix = plot_dir + name
+
+        if cropped is False:
+            prefix += "_full"
+
+        with open(prefix + '_resmax.data', 'rb') as file:
             resmax[name] = pickle.load(file)
 
-        with open(plot_dir + name + '_resmean.data', 'rb') as file:
+        with open(prefix + '_resmean.data', 'rb') as file:
             resmean[name] = pickle.load(file)
 
-        with open(plot_dir + name + '_points.data', 'rb') as file:
+        with open(prefix + '_points.data', 'rb') as file:
             pointdata[name] = pickle.load(file)
 
 
@@ -132,8 +137,10 @@ def plot_images(to_plot, labels, plot_dir="pressure_images/", individual_images=
 
 
 # define what to plot
-list = ("solverbased_i5", "solverbased", "solverbased_i15")
-label_list = ("Solver-based (5 it)", "Solver-based (10 it)", "Solver-based (15 it)")
+list = ("solverbased_i5", "tompson", "tompson_scalar")
+label_list = ("Solver-based (5 it)", "Tompson", "Tompson (Div - laplace(Pressure))")
 
-plot_iterations(list, label_list)
-plot_residuum(list, label_list)
+#plot_iterations(list, label_list)
+#plot_residuum(list, label_list, cropped=True)
+
+plot_images(list, label_list)

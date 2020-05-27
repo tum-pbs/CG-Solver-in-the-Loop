@@ -5,7 +5,7 @@ import sys
 os.environ['CUDA_VISIBLE_DEVICES'] = '6'
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
-DATAPATH = 'data/smoke_v3_highaccuracy/'  # has to match DOMAIN
+DATAPATH = 'data/smoke_v3_test/'  # has to match DOMAIN
 DESCRIPTION = u"""
 Train a neural network to predict the pressure corresponding to the given divergence field.
 The predicted pressure should be able to be fed into a solver, reducing the iterations it needs to converge.
@@ -53,6 +53,7 @@ class SolverAssistedUnet(LearningApp):
         self.add_field('Divergence', self.divergence_in)
         self.add_field('Predicted Pressure', pred_pressure)
         self.add_field('True Pressure', self.true_pressure)
+        self.add_field('Residuum', math.abs(divergence_in - pred_pressure.laplace()))
 
         self.save_path = EditableString("Save/Load Path", self.scene.subpath('checkpoint_%08d' % self.steps))
 
