@@ -86,6 +86,9 @@ class NetworkSimulation(App):
             self.p_trueGuess, self.iter_true = solve_pressure(div, DOMAIN, pressure_solver=it_solver(self.max_it, acc), guess=p_true)
             self.p_noGuess, self.iter_zero = solve_pressure(div, DOMAIN, pressure_solver=it_solver(self.max_it, acc), guess=p_zero)
 
+            # Netwrok prediction + limited iterations
+            self.p_pred_i1, _ = solve_pressure(div, DOMAIN, pressure_solver=it_solver(1), guess=p_pred)
+
         # --- GUI ---
         self.value_frames_per_simulation = 100
         self.add_field('Density', lambda: self.smoke.density)
@@ -244,8 +247,8 @@ class NetworkSimulation(App):
             it.extend([i] * batch_size)
 
             #residuum with guess (absolute value)
-            residuum = math.abs(div_in - pressure.laplace()).data[:, 1:-1, 1:-1, :]
-            #residuum = math.abs(div_in - pressure.laplace()).data
+            #residuum = math.abs(div_in - pressure.laplace()).data[:, 1:-1, 1:-1, :]
+            residuum = math.abs(div_in - pressure.laplace()).data
             batch_maxima = math.max(residuum, axis=(1, 2, 3))
             batch_means = math.mean(residuum, axis=(1, 2, 3))
 
@@ -261,7 +264,7 @@ class NetworkSimulation(App):
 
 
             # residuum without guess (absolute value)
-            residuum_noguess = math.abs(div_in - pressure_noguess.laplace()).data[:, 1:-1, 1:-1, :]
+            #residuum_noguess = math.abs(div_in - pressure_noguess.laplace()).data[:, 1:-1, 1:-1, :]
             residuum_noguess = math.abs(div_in - pressure_noguess.laplace()).data
             batch_maxima_noguess = math.max(residuum_noguess, axis=(1, 2, 3))
             batch_means_noguess = math.mean(residuum_noguess, axis=(1, 2, 3))
@@ -276,13 +279,13 @@ class NetworkSimulation(App):
             print(i)
 
         # Save Calculated data to disk for later plotting
-        with open(self.plot_path + '/model_resmax.data', 'wb') as file:
+        with open(self.plot_path + '/supervised_full_resmax.data', 'wb') as file:
             pickle.dump([range(0, it_to_plot), residuum_max], file)
 
-        with open(self.plot_path + '/model_resmean.data', 'wb') as file:
+        with open(self.plot_path + '/supervised_full_resmean.data', 'wb') as file:
             pickle.dump([range(0, it_to_plot), residuum_mean], file)
 
-        with open(self.plot_path + '/model_points.data', 'wb') as file:
+        with open(self.plot_path + '/supervised_full_points.data', 'wb') as file:
             pickle.dump([it, all_means, all_maxima], file)
 
 
@@ -298,19 +301,47 @@ class NetworkSimulation(App):
 
         self.info('Finished calculation, saved plot data to %s' % self.plot_path)
 
-    def action_debug_solve(self):
+    def action_residuum_images(self):
 
-        batch = self.data_reader[perm[:1]]
+        self.info('Generate Residuum Image with loaded Model...')
 
-        f_dict = {self.divergence_in.data: batch[0], self.true_pressure.data: batch[1]}
-        div, p_pred = self.session.run([self.divergence_in, self.pred_pressure], f_dict)
+        batch_size = 20
+        batch = self.data_reader[perm[:batch_size]]
+        f_dict = {self.divergence_in.data: batch[0], self.true_pressure: batch[1]}
 
-        res = math.abs(div - p_pred.laplace()).data[:, 1:-1, 1:-1, :]
-        res_full = math.abs(div - p_pred.laplace()).data
+        self.info('Evaluate Network Pressure Prediction')
+        div, p_pred, p_pred_i1 = self.session.run([self.divergence_in, self.pred_pressure, self.p_pred_i1], feed_dict=f_dict)
 
-        pressure, it = solve_pressure(div, DOMAIN, pressure_solver=it_solver(500, 1e-3), guess=p_pred)
+        # calculate residuum
+        res = math.abs(div - p_pred.laplace()).data
+        res_i1 = math.abs(div - p_pred_i1.laplace()).data
 
-        print("hurp durp")
+        res_images = []
+        res_i1_images = []
+
+        self.info('Plot Images')
+        for i in range(batch_size):
+            residuum = np.reshape(res[i], DOMAIN.resolution)
+            residuum_i1 = np.reshape(res_i1[i], DOMAIN.resolution)
+
+            res_images.append(residuum)
+            res_i1_images.append(residuum_i1)
+
+            plt.imshow(residuum, cmap='bwr', origin='lower')
+            path = self.scene.subpath(name='residuum_nn_%s' % i)
+            plt.savefig(path, dpi=200)
+            plt.close()
+
+            plt.imshow(residuum_i1, cmap='bwr', origin='lower')
+            path = self.scene.subpath(name='residuum_nn_i1_%s' % i)
+            plt.savefig(path, dpi=200)
+            plt.close()
+
+
+        self.info('Save Residuum Images')
+        np.save(self.plot_path + "/res_images", arr=res_images)
+        np.save(self.plot_path + "/res_i1_images", arr=res_i1_images)
+        self.info('Saved Residuum images to %s' % path)
 
 
     def step(self):

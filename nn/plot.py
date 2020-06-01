@@ -6,7 +6,6 @@ import os
 import numpy as np
 import pickle
 
-colors = ("blue", "green", "orange", "red", "purple", "black")
 
 def plot_iterations(to_plot, labels, plot_dir="iter_plot/"):
     print('Creating Accuracy/Iterations Plot...')
@@ -90,6 +89,47 @@ def plot_residuum(to_plot, labels, cropped=True, plot_dir="residuum_plot/"):
     plt.close()
     print('Saved Residuum Max Plot to %s' % path)
 
+def plot_residuum_zoomed(to_plot, labels, cropped=True, plot_dir="residuum_plot/"):
+
+    # --- Load Data ---
+    resmax = {}
+    resmean = {}
+
+    for name in to_plot:
+        prefix = plot_dir + name
+
+        if cropped is False:
+            prefix += "_full"
+
+        with open(prefix + '_resmax.data', 'rb') as file:
+            resmax[name] = pickle.load(file)
+
+        with open(prefix + '_resmean.data', 'rb') as file:
+            resmean[name] = pickle.load(file)
+
+
+    # --- Plot ---
+
+    fig, ax = plt.subplots()
+
+    # Residuum Max
+    ax.set_ylabel('Residuum Max')
+    ax.set_yscale('log')
+    ax.set_xlabel('Iterations')
+
+    for name, color, l in zip(to_plot, colors, labels):
+
+        resmax_data = resmax[name][1]
+        ax.plot(range(70), resmax_data[:70], color=color, label=l)
+
+    ax.legend()
+    fig.tight_layout()
+
+    path = plot_dir + "residual_zoomed"
+    plt.savefig(path, dpi=200)
+    plt.close()
+    print('Saved Residuum Max Plot to %s' % path)
+
 def plot_images(to_plot, labels, plot_dir="pressure_images/", individual_images=True):
 
     img_data = {}
@@ -101,7 +141,7 @@ def plot_images(to_plot, labels, plot_dir="pressure_images/", individual_images=
         # plot individual images if option active
         if individual_images:
             for i, image in zip(range(len(data)), data):
-                plt.imshow(image, cmap='bwr', origin='lower')
+                plt.imshow(image, cmap='terrain', origin='lower')
 
                 path = plot_dir + name + "/"
 
@@ -128,19 +168,64 @@ def plot_images(to_plot, labels, plot_dir="pressure_images/", individual_images=
     # Images
     for name, j in zip(to_plot, range(len(to_plot))):
         for img, i in zip(example_indices, range(len(example_indices))):
-            axarr[i][j].imshow(img_data[name][img], cmap='bwr', origin='lower')
+            axarr[i][j].imshow(img_data[name][img], cmap='terrain', origin='lower')
 
     path = plot_dir + "img_comparison"
     plt.savefig(path, dpi=300)
     plt.close()
 
 
+def plot_images_residual(to_plot, labels, plot_dir="residual_images/"):
+
+    img_data = {}
+    #TODO load input divergence as first column
+
+    # Load Residual Image data
+    for name in to_plot:
+        img_data[name] = data = np.load(plot_dir + name + "_res_i1_images.npy")
+
+
+    # Comparison Plot
+    example_indices = (6, 7, 17)
+    f, axarr = plt.subplots(len(example_indices), len(to_plot))
+    plt.subplots_adjust(hspace=0.1, wspace=0.0)
+
+    #turn off subplot tick labels
+    for row in axarr:
+        for ax in row:
+            ax.tick_params(bottom=False, left=False, labelbottom=False, labelleft=False)
+
+    # Labels
+    for l, i in zip(labels, range(len(to_plot))):
+        axarr[-1][i].set_xlabel(l)
+
+    for j in range(len(example_indices)):
+        axarr[j][0].set_ylabel("Sample %s" % j)
+
+    # Images
+    for sample, i in zip(example_indices, range(len(example_indices))):
+        row_imgs = np.array([img_data[k][sample] for k in img_data])
+        max = np.max(row_imgs)
+        min = np.min(row_imgs)
+
+        colorbar = None
+
+        for name, j in zip(to_plot, range(len(to_plot))):
+            img = axarr[i][j].imshow(img_data[name][sample], vmax=max, vmin=min, cmap='terrain', origin='lower')
+
+            if colorbar is None:
+                colorbar = f.colorbar(img, ax=axarr[i][-1])
+
+    path = plot_dir + "cg_residual_img.pdf"
+    plt.savefig(path, dpi=300, format='pdf')
+    plt.close()
 
 # define what to plot
-list = ("solverbased_i5", "tompson", "tompson_scalar")
-label_list = ("Solver-based (5 it)", "Tompson", "Tompson (Div - laplace(Pressure))")
+colors = ("blue", "green", "orange", "red", "purple", "black")
+#list = ("solverbased_i1", "solverbased_i2", "solverbased_i5", "solverbased", "solverbased_i15")
+#label_list = ("SOL-1", "SOL-2", "SOL-5", "SOL-10", "SOL-15")
 
-#plot_iterations(list, label_list)
-#plot_residuum(list, label_list, cropped=True)
+list = ("sol5", "sup", "tom")
+label_list = ("SOL-5", "NON", "SOL-DIV")
 
-plot_images(list, label_list)
+plot_images_residual(list, label_list)
