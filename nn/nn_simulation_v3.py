@@ -118,9 +118,9 @@ class NetworkSimulation(App):
         batch = perm[:100]
         accuracies = (1e-1, 0.5e-1, 1e-2, 0.5e-2, 1e-3, 0.5e-3, 1e-4, 0.5e-4, 1e-5, 0.5e-5, 1e-6)
 
-        mean_it_zero = []
-        mean_it_true = []
-        mean_it_pred = []
+        it_dict_zero = {}
+        it_dict_true = {}
+        it_dict_pred = {}
 
         for accuracy in accuracies:
             iterations_zero = []
@@ -143,24 +143,68 @@ class NetworkSimulation(App):
                 iterations_guess.append(itPred)
                 iterations_true.append(itTrue)
 
-            mean_it_zero.append(math.mean(iterations_zero))
-            mean_it_true.append(math.mean(iterations_true))
-            mean_it_pred.append(math.mean(iterations_guess))
+            it_dict_zero[accuracy] = iterations_zero
+            it_dict_true[accuracy] = iterations_true
+            it_dict_pred[accuracy] = iterations_guess
+
+            # Print mean and standard deviation
+            self.info("Accuracy %s:" % accuracy)
+            self.info("Zero Guess - Mean: %s | Std: %s" % (math.mean(iterations_zero), math.std(iterations_zero)))
+            self.info("True Guess - Mean: %s | Std: %s" % (math.mean(iterations_true), math.std(iterations_true)))
+            self.info("Pred Guess - Mean: %s | Std: %s" % (math.mean(iterations_guess), math.std(iterations_guess)))
 
         # Save Calculated data to disk for later plotting
         with open(self.plot_path + '/model_iter.data', 'wb') as file:
-            pickle.dump(mean_it_pred, file)
+            pickle.dump(it_dict_pred, file)
 
         with open(self.plot_path + '/zeroguess_iter.data', 'wb') as file:
-            pickle.dump(mean_it_zero, file)
+            pickle.dump(it_dict_zero, file)
 
         with open(self.plot_path + '/trueguess_iter.data', 'wb') as file:
-            pickle.dump(mean_it_true, file)
+            pickle.dump(it_dict_true, file)
 
         with open(self.plot_path + '/acc.data', 'wb') as file:
             pickle.dump(accuracies, file)
 
         self.info('Finished calculation, saved plot data to %s' % self.plot_path)
+
+    def action_iterations_for_acc(self):
+
+        batch = perm[:100]
+
+        accuracy = 1e-3
+
+        self.info('Calculate iterations needed to reach %s accuracy...' % accuracy)
+
+        iterations_zero = []
+        iterations_guess = []
+        iterations_true = []
+
+        # Look at each sample individually
+        for i in batch:
+            sample = self.data_reader[int(i)]
+            zero = np.zeros_like(sample[0])
+
+            f_dict = {self.divergence_in.data: sample[0], self.true_pressure.data: sample[1], self.zero_guess.data: zero, self.max_it: 2000, self.accuracy: accuracy}
+
+            # Solve for pressure for this sample using different guesses
+            itZero, itPred, itTrue = self.session.run([self.iter_zero, self.iter_guess, self.iter_true], f_dict)
+
+            iterations_zero.append(itZero)
+            iterations_guess.append(itPred)
+            iterations_true.append(itTrue)
+
+        # Save Calculated data to disk for later plotting
+        with open(self.plot_path + '/model_iterations.data', 'wb') as file:
+            pickle.dump(iterations_guess, file)
+
+        with open(self.plot_path + '/zeroguess_iterations.data', 'wb') as file:
+            pickle.dump(iterations_zero, file)
+
+        with open(self.plot_path + '/trueguess_iterations.data', 'wb') as file:
+            pickle.dump(iterations_true, file)
+
+        self.info('Finished calculation, saved iteration data to %s' % self.plot_path)
 
     def action_save_guess_images(self):
 
@@ -301,6 +345,7 @@ class NetworkSimulation(App):
 
         self.info('Finished calculation, saved plot data to %s' % self.plot_path)
 
+
     def action_residuum_images(self):
 
         self.info('Generate Residuum Image with loaded Model...')
@@ -342,6 +387,17 @@ class NetworkSimulation(App):
         np.save(self.plot_path + "/res_images", arr=res_images)
         np.save(self.plot_path + "/res_i1_images", arr=res_i1_images)
         self.info('Saved Residuum images to %s' % path)
+
+    def action_div_images(self):
+
+        self.info('Save test batch divergence data...')
+
+        batch_size = 20
+        batch = self.data_reader[perm[:batch_size]]
+        div = batch[0]
+
+        self.info('Save Divergence Images')
+        np.save(self.plot_path + "/div_images", arr=div)
 
 
     def step(self):
