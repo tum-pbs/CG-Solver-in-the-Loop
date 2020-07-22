@@ -11,8 +11,9 @@ DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
 DATAPATH = 'data/smoke_v3_test/'  # has to match DOMAIN
 USE_FLOAT64 = True
 DESCRIPTION = u"""
-Simulate random smoke distributions using a trained NN and a normal solver for comparison.
-Left: Simulation using NN as solver         Right: Simulation using numeric solver
+Simulate random smoke distributions using a trained NN and a normal CG solver for comparison.\n
+Left: Simulation using NN as solver         Right: Simulation using numeric solver\n
+Provides several Buttons that will generate analysis data evaluated on a test dataset.
 """
 
 np.random.seed(2020)  # fix seed
@@ -90,7 +91,7 @@ class NetworkSimulation(App):
             self.p_pred_i1, _ = solve_pressure(div, DOMAIN, pressure_solver=it_solver(1), guess=p_pred)
 
         # --- GUI ---
-        self.value_frames_per_simulation = 100
+        self.value_frames_per_simulation = 150
         self.add_field('Density', lambda: self.smoke.density)
         self.add_field('Density NN', lambda: self.smoke_nn.density)
         self.add_field('Velocity', lambda: self.smoke.velocity)
@@ -401,13 +402,46 @@ class NetworkSimulation(App):
 
 
     def step(self):
+
+        # Start a new Simulation after a specified amount of steps
         if self.steps >= self.value_frames_per_simulation:
+
+            # Calculate Error of simulation
+            self.info("Residual Error (Remaining Divergence), Frame %s :" % self.steps)
+            error_cg = math.mean(math.abs(self.smoke.solve_info["divergence"].data))
+            error_nn = math.mean(math.abs(self.smoke_nn.solve_info["divergence"].data))
+
+            vel_diff = (self.smoke.velocity - self.smoke_nn.velocity).staggered_tensor()
+            diff_error = math.mean(math.abs(vel_diff))
+
+            self.info("Residual CG: {:0.5f}".format(error_cg))
+            self.info("Residual NN: {:0.5f}".format(error_nn))
+            self.info("NN Velocity Error (Difference from CG): {:0.5f}".format(diff_error))
+
+            # Reset Simulations
             self.new_scene()
             self.steps = 0
             self.smoke.density = random_density
             self.smoke_nn.density = self.smoke.density
             self.smoke.velocity = random_velocity
             self.smoke_nn.velocity = self.smoke.velocity
+
+        # --- Save Images to Disk ---
+        density = np.reshape(self.smoke.density.data, DOMAIN.resolution)
+
+        plt.imshow(density, cmap='bwr', origin='lower')
+        path = self.scene.subpath(name='density_%s' % self.steps)
+        plt.savefig(path, dpi=300)
+        plt.close()
+
+        density_nn = np.reshape(self.smoke_nn.density.data, DOMAIN.resolution)
+
+        plt.imshow(density_nn, cmap='bwr', origin='lower')
+        path = self.scene.subpath(name='density_nn_%s' % self.steps)
+        plt.savefig(path, dpi=300)
+        plt.close()
+
+        # --- Actual Simulation --
         world.step()  # simulate one step
 
 

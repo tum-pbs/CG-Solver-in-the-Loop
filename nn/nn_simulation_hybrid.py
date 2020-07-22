@@ -9,16 +9,13 @@ import pickle
 import time
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
-DATAPATH = 'data/smoke_v3_test/'  # has to match DOMAIN
-USE_FLOAT64 = True
 DESCRIPTION = u"""
-Simulate random smoke distributions using a trained NN and a normal solver for comparison.
-Left: Simulation using NN as solver         Right: Simulation using numeric solver
+Simulate random smoke distributions using a Hybrid approach where first, a trained NN predicts \n
+an initial pressure guess and then the CG solver continues until the target accuracy is reached.
+Performance in MS is compared to simply using the CG solver on its own.
 """
 
 np.random.seed(2020)  # fix seed
-perm = np.random.permutation(3000)
-
 
 def random_density(shape):
     return math.maximum(0, math.randfreq(shape, power=32))
@@ -28,9 +25,10 @@ def random_velocity(shape):
 
 class NNPoissonSolver(PoissonSolver):
 
-    def __init__(self, normalizeInput=True):
+    def __init__(self, cg_solver=it_solver(500), normalizeInput=True):
         PoissonSolver.__init__(self, 'NN', supported_devices=('CPU', 'GPU', 'TPU'), supports_guess=False, supports_loop_counter=False, supports_continuous_masks=False)
         self.normalizeInput = normalizeInput
+        self.solver = cg_solver
 
     # Use NN and CG Solver together to get pressure
     def solve(self, field, domain, guess):
@@ -43,7 +41,7 @@ class NNPoissonSolver(PoissonSolver):
             guess = predict_pressure(div, normalize=self.normalizeInput)
 
             # Solve
-            pressure, it = solve_pressure(div, domain, pressure_solver=it_solver(500), guess=guess)
+            pressure, it = solve_pressure(div, domain, pressure_solver=self.solver, guess=guess)
 
             return pressure.data, it
 
@@ -56,7 +54,7 @@ class NetworkSimulation(App):
         # --- Set up Numerical Fluid Simulation ---
         self.solver = SparseCG(autodiff=True, max_iterations=500, accuracy=1e-3)
         self.smoke = world.add(Fluid(DOMAIN, name='smoke', density=random_density, velocity=random_velocity, buoyancy_factor=0.1), physics=IncompressibleFlow(pressure_solver=self.solver))
-        self.smoke_nn = world.add(Fluid(DOMAIN, name='NN_smoke', density=self.smoke.density, velocity=self.smoke.velocity, buoyancy_factor=0.1), physics=IncompressibleFlow(pressure_solver=NNPoissonSolver()))
+        self.smoke_nn = world.add(Fluid(DOMAIN, name='NN_smoke', density=self.smoke.density, velocity=self.smoke.velocity, buoyancy_factor=0.1), physics=IncompressibleFlow(pressure_solver=NNPoissonSolver(cg_solver=self.solver)))
 
 
         # --- GUI ---
@@ -98,19 +96,20 @@ class NetworkSimulation(App):
         clock_cg = time.process_time()
         world.step(state=self.smoke)  # simulate one step CG-only
         clock_cg = time.process_time() - clock_cg
-        self.total_time_cg += clock_cg
+        if self.frames > 0: self.total_time_cg += clock_cg
 
         # Hybrid Sim
         clock_hybrid = time.process_time()
         world.step(state=self.smoke_nn)  # simulate one step hybrid
         clock_hybrid = time.process_time() - clock_hybrid
-        self.total_time_hybrid += clock_hybrid
+        if self.frames > 0: self.total_time_hybrid += clock_hybrid
 
         self.frames += 1
 
-        self.info("Iterations - Hybrid: %s | CG: %s" % (self.smoke_nn.solve_info["iterations"], self.smoke.solve_info["iterations"]))
-        self.info("Time - Hybrid: %s ms| CG: %s ms" % (clock_hybrid, clock_cg))
-        self.info("Time (Avg) - Hybrid: %s ms| CG: %s ms" % (self.total_time_hybrid / self.frames, self.total_time_cg / self.frames))
+        print("Frame %s:" % self.frames)
+        print("Iterations - Hybrid: {:0} | CG: {:0}".format(self.smoke_nn.solve_info["iterations"], self.smoke.solve_info["iterations"]))
+        print("Time - Hybrid: {:0.4f}ms | CG: {:0.4f}ms".format(clock_hybrid, clock_cg))
+        print("Time (Avg) - Hybrid: {:0.4f}ms | CG: {:0.4f}ms".format(self.total_time_hybrid / (self.frames -1), self.total_time_cg / (self.frames -1)))
 
 
 
