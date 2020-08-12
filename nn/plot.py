@@ -313,7 +313,41 @@ def plot_iterations_for_target(to_plot, labels, plot_dir="iter_plot_single_targe
     plt.close()
     print('Saved "iterations for target" figure to %s' % path)
 
+def plot_sim_residual(to_plot, labels, plot_dir="sim_residual/"):
 
+    # --- Load Data ---
+    residual = {}
+
+    for name in to_plot:
+        with open(plot_dir + 'residual_' + name + '.data', 'rb') as file:
+            residual[name] = pickle.load(file)
+
+
+    # --- Plot ---
+
+    fig, ax = plt.subplots()
+    fig.set_size_inches(8, 5)
+
+    # Residuum Max
+    ax.set_ylabel('Residual Divergence (Max)')
+    ax.set_yscale('log')
+    ax.set_xlabel('Simulation Step')
+
+    for name, color, l in zip(to_plot, colors, labels):
+        ax.plot(residual[name][0], residual[name][1], color=color, label=l)
+
+    ax.legend(fontsize=18)
+    fig.tight_layout()
+
+    #ax.set_title('Residual Error over Iterations')
+    ax.tick_params(axis='both', labelsize=18)
+    plt.grid(True, axis='y')
+    plt.grid(False, axis='x')
+
+    path = plot_dir + "sim_residual_plot.pdf"
+    plt.savefig(path, dpi=100, format='pdf')
+    plt.close()
+    print('Saved Simulation Residual to %s' % path)
 
 # define what to plot
 
@@ -342,7 +376,7 @@ plt.rcParams.update(
 
 # #TODO Full Iterations Plot
 # list = ("zeroguess", "tompson_scalar", "supervised", "solverbased_i5")
-# label_list = ("SRC", "SOL$_{DIV}$", "NON", "SOL$_5$")
+# label_list = ("Zero", "PHY", "SUP", "SOL$_5$")
 # colors = (cm.tab20c( 7,20), cm.tab20c(13,20), cm.tab20c(17,20), cm.Greens(0.5))
 #
 # plot_iterations(list, label_list)
@@ -350,7 +384,7 @@ plt.rcParams.update(
 #
 #TODO Residual Plot
 list = ("zeroguess", "solverbased_i5", "tompson_scalar", "supervised")
-label_list = ("SRC", "SOL$_5$",  "SOL$_{DIV}$", "NON")
+label_list = ("Zero", "SOL$_5$",  "PHY", "SUP")
 colors = (cm.tab20c( 7,20), cm.Greens(0.5), cm.tab20c(13,20), cm.tab20c(17,20))
 
 plot_residuum(list, label_list, cropped=False)
@@ -377,3 +411,10 @@ plot_residuum(list, label_list, cropped=False)
 # label_list = ["SOL$_5$",  "SOL$_{DIV}$", "NON"]
 #
 # plot_images_pressure(list, label_list)
+
+# #TODO Simulation Residual Divergence Plot
+# list = ("cg", "solverbased_i5")
+# label_list = ("CG", "SOL")
+# colors = (cm.tab20c( 7,20), cm.Greens(0.5), cm.tab20c(13,20), cm.tab20c(17,20), cm.tab20c(19,20))
+#
+# plot_sim_residual(list, label_list)

@@ -110,6 +110,14 @@ class NetworkSimulation(App):
         self.plot_path = EditableString("Plot Data Path", self.scene.path)
         # self.save_path = EditableString("Load Path", 'NN_Unet3_Basic/nn_closed_borders/checkpoint_00300000')
 
+        # --- Plotting ---
+        self.residual = np.array([])
+        self.residual_nn = np.array([])
+
+        self.residual_avg = np.zeros(self.value_frames_per_simulation)
+        self.residual_nn_avg = np.zeros(self.value_frames_per_simulation)
+        self.sim_counter = 0
+
     def action_load_model(self):
         self.session.restore(self.save_path, scope='model')
 
@@ -405,7 +413,6 @@ class NetworkSimulation(App):
 
         # Start a new Simulation after a specified amount of steps
         if self.steps >= self.value_frames_per_simulation:
-
             # Calculate Error of simulation
             self.info("Residual Error (Remaining Divergence), Frame %s :" % self.steps)
             error_cg = math.mean(math.abs(self.smoke.solve_info["divergence"].data))
@@ -418,6 +425,10 @@ class NetworkSimulation(App):
             self.info("Residual NN: {:0.5f}".format(error_nn))
             self.info("NN Velocity Error (Difference from CG): {:0.5f}".format(diff_error))
 
+            # --- Average Residual over Sim ---
+            self.residual_avg += self.residual
+            self.residual_nn_avg += self.residual_nn
+
             # Reset Simulations
             self.new_scene()
             self.steps = 0
@@ -426,23 +437,53 @@ class NetworkSimulation(App):
             self.smoke.velocity = random_velocity
             self.smoke_nn.velocity = self.smoke.velocity
 
+            self.residual = np.array([])
+            self.residual_nn = np.array([])
+            self.sim_counter += 1
+
+        if self.sim_counter >= 100:
+            self.residual_avg /= self.sim_counter
+            self.residual_nn_avg /= self.sim_counter
+
+            # --- Save Residual over Sim to Disk ---
+            with open(self.scene.subpath('residual.data'), 'wb') as file:
+                pickle.dump([range(0, self.value_frames_per_simulation), self.residual_avg], file)
+            with open(self.scene.subpath('residual_nn.data'), 'wb') as file:
+                pickle.dump([range(0, self.value_frames_per_simulation), self.residual_nn_avg], file)
+
+            self.sim_counter = 0
+
         # --- Save Images to Disk ---
-        density = np.reshape(self.smoke.density.data, DOMAIN.resolution)
-
-        plt.imshow(density, cmap='bwr', origin='lower')
-        path = self.scene.subpath(name='density_%s' % self.steps)
-        plt.savefig(path, dpi=300)
-        plt.close()
-
-        density_nn = np.reshape(self.smoke_nn.density.data, DOMAIN.resolution)
-
-        plt.imshow(density_nn, cmap='bwr', origin='lower')
-        path = self.scene.subpath(name='density_nn_%s' % self.steps)
-        plt.savefig(path, dpi=300)
-        plt.close()
+        # density = np.reshape(self.smoke.density.data, DOMAIN.resolution)
+        #
+        # plt.imshow(density, cmap='bwr', origin='lower')
+        # path = self.scene.subpath(name='density_%s' % self.steps)
+        # plt.savefig(path, dpi=300)
+        # plt.close()
+        #
+        # density_nn = np.reshape(self.smoke_nn.density.data, DOMAIN.resolution)
+        #
+        # plt.imshow(density_nn, cmap='bwr', origin='lower')
+        # path = self.scene.subpath(name='density_nn_%s' % self.steps)
+        # plt.savefig(path, dpi=300)
+        # plt.close()
 
         # --- Actual Simulation --
         world.step()  # simulate one step
+
+        # --- Save Residual Divergence over Simulation ---
+        div = self.smoke.solve_info["divergence"]
+        div_nn = self.smoke_nn.solve_info["divergence"]
+
+        p = self.smoke.solve_info["pressure"]
+        p_nn = self.smoke_nn.solve_info["pressure"]
+
+        residual = math.abs(div - p.laplace()).data
+        residual_nn = math.abs(div_nn - p_nn.laplace()).data
+
+        self.residual = np.append(self.residual, math.max(residual))
+        self.residual_nn = np.append(self.residual_nn, math.max(residual_nn))
+
 
 
 app = NetworkSimulation().prepare()
