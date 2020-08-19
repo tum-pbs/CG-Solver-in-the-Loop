@@ -2,10 +2,10 @@
 from nn_architecture import *
 import sys
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '6'
+os.environ['CUDA_VISIBLE_DEVICES'] = '7'
 
 DOMAIN = Domain([64, 64], boundaries=CLOSED)  # [y, x]
-DATAPATH = 'data/smoke_v3_test/'  # has to match DOMAIN
+DATAPATH = 'data/smoke_v3_highaccuracy/'  # has to match DOMAIN
 DESCRIPTION = u"""
 Train a neural network to predict the pressure corresponding to the given divergence field.
 The predicted pressure should be able to be fed into a solver, reducing the iterations it needs to converge.
@@ -29,11 +29,10 @@ class SolverAssistedUnet(LearningApp):
         with self.model_scope():
             self.pred_pressure = pred_pressure = predict_pressure(divergence_in)#NN Pressure Guess
 
-            p_networkPlus10s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(10), guess=pred_pressure)
-            p_networkPlus1s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(1), guess=pred_pressure)
-            p_networkPlus2s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(2), guess=pred_pressure)
-            p_networkPlus5s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(5), guess=pred_pressure)
-            p_networkPlus15s, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(15), guess=pred_pressure)
+            p_networkPlus = []
+            for i in range(0, 16):
+                p_i, _ = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(i), guess=pred_pressure)
+                p_networkPlus.append(p_i)
 
             # Pressure Solves with different Guesses (max iterations as placeholder)
             self.p_predGuess, self.iter_guess = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(500), guess=pred_pressure)
@@ -41,8 +40,12 @@ class SolverAssistedUnet(LearningApp):
             self.p_noGuess,   self.iter_zero  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(500), guess=None)
 
         # --- Loss function ---
-        loss = math.l2_loss(p_networkPlus1s - pred_pressure)
-        self.add_objective(loss, 'Solver-Based Loss')
+        #loss = math.l2_loss(p_networkPlus[3] - pred_pressure)
+        sum_loss = math.l2_loss(p_networkPlus[1] - pred_pressure)
+        for i in range(2, 6):
+            sum_loss += math.l2_loss(p_networkPlus[i] - pred_pressure)
+
+        self.add_objective(sum_loss, 'Solver-Based Loss')
 
         # --- Dataset ---
         self.set_data(dict={self.divergence_in.data: 'Divergence', self.true_pressure.data: 'Pressure'},
