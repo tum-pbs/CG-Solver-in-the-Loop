@@ -40,12 +40,12 @@ class SolverAssistedUnet(LearningApp):
             self.p_noGuess,   self.iter_zero  = solve_pressure(divergence_in, DOMAIN, pressure_solver=it_solver(500), guess=None)
 
         # --- Loss function ---
-        #loss = math.l2_loss(p_networkPlus[3] - pred_pressure)
-        sum_loss = math.l2_loss(p_networkPlus[1] - pred_pressure)
-        for i in range(2, 6):
-            sum_loss += math.l2_loss(p_networkPlus[i] - pred_pressure)
+        loss = math.l2_loss(p_networkPlus[3] - pred_pressure)
+        #sum_loss = math.l2_loss(p_networkPlus[1] - pred_pressure)
+        #for i in range(2, 6):
+        #    sum_loss += math.l2_loss(p_networkPlus[i] - pred_pressure)
 
-        self.add_objective(sum_loss, 'Solver-Based Loss')
+        self.add_objective(loss, 'Solver-Based Loss (k=3)')
 
         # --- Dataset ---
         self.set_data(dict={self.divergence_in.data: 'Divergence', self.true_pressure.data: 'Pressure'},
