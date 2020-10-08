@@ -1,3 +1,18 @@
+# Solver-Based Learning of Pressure Fields for Eulerian Fluid Simulation
+
+In this Master thesis, we investigated different approaches to training a Convolutional Neural Network (CNN)
+so that it can infer an approximate pressure solution that can be used as an initial guess for the numerical pressure
+solver in a Eulerian fluid simulation.
+We found that training with a differentiable solver in the loss greatly improves the usefulness of the CNN's output
+for the solver. Using the network and solver together in a hybrid simulation, it is possible to achieve notable speed-ups
+compared to traditional simulations.
+Comparison to physics-informed loss formulations showed that they make the network more stable as a standalone pressure predictor
+than our initial solver-based loss approach, due to not featuring a direct difference to an intermediate solver solution.
+For more details on all findings, please refer to the full thesis.
+
+This repository contains the source code used to generate the data, train the models and analyze their performance.
+It also includes the snapshot of Φ<sub>*Flow*</sub> that was used for this thesis, which is not the most current version.
+
 # Φ<sub>*Flow*</sub>
 
 [![Build Status](https://travis-ci.com/tum-pbs/PhiFlow.svg?token=8vG2QPsZzeswTApmkekH&branch=master)](https://travis-ci.com/tum-pbs/PhiFlow)
