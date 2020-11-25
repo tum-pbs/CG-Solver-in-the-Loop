@@ -1,106 +1,42 @@
 # Solver-Based Learning of Pressure Fields for Eulerian Fluid Simulation
 
-In this Master thesis, we investigated different approaches to training a Convolutional Neural Network (CNN)
-so that it can infer an approximate pressure solution that can be used as an initial guess for the numerical pressure
-solver in a Eulerian fluid simulation.
-We found that training with a differentiable solver in the loss greatly improves the usefulness of the CNN's output
-for the solver. Using the network and solver together in a hybrid simulation, it is possible to achieve notable speed-ups
-compared to traditional simulations.
-Comparison to physics-informed loss formulations showed that they make the network more stable as a standalone pressure predictor
-than our initial solver-based loss approach, due to not featuring a direct difference to an intermediate solver solution.
-For more details on all findings, please refer to the full thesis.
+In this work, we investigated different approaches to training a Convolutional Neural Network (CNN)
+so that it can infer an approximate pressure solution that can be used as an initial guess for a 
+Conjugate Gradient (CG) solver in a Eulerian fluid simulation.
+
+In particular, we compared three different loss formulations:
+1. SUP: A standard supervised loss
+2. PHY: An unsupervised, physics-informed loss (directly minimizing the residual divergence after correcting with the pressure guess)
+3. SOL: A loss including the differentiable CG solver which minimizes the difference of the network's prediction to a limited-iteration CG solution computed on top of the network's guess
 
 This repository contains the source code used to generate the data, train the models and analyze their performance.
-It also includes the snapshot of Φ<sub>*Flow*</sub> that was used for this thesis, which is not the most current version.
+It also includes the snapshot of Φ<sub>*Flow*</sub> that was used for these experiments, which is not the most current version.
 
-# Φ<sub>*Flow*</sub>
+## Test Dataset Performance
+Comparing the three approaches on sample divergence fields from our test dataset, we observed that the physics-based loss leads to a higher accuracy of the network's prediction itself, yet performs much worse as an initial guess for the CG solver than the solver-based approach in particular.
 
-[![Build Status](https://travis-ci.com/tum-pbs/PhiFlow.svg?token=8vG2QPsZzeswTApmkekH&branch=master)](https://travis-ci.com/tum-pbs/PhiFlow)
-[![PyPI pyversions](https://img.shields.io/pypi/pyversions/phiflow.svg)](https://pypi.org/project/phiflow/)
-[![PyPI license](https://img.shields.io/pypi/l/phiflow.svg)](https://pypi.org/project/phiflow/)
-[![Google Collab Book](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1S21OY8hzh1oZK2wQyL3BNXvSlrMTtRbV#offline=true&sandboxMode=true)
+![TestsetResidual](documentation/figures/results_testset_residual.PNG)
 
-![Gui](documentation/figures/WebInterface.png)
+Given an initial guess by the model trained with the solver-based loss, the CG solver's residual divergence decreases very quickly over the first few iterations. This leads to the solver needing much fewer iterations to reach target accuracies like 10^-3 than it would from a zero guess or that of the physics-informed model.
 
-Φ<sub>*Flow*</sub> is a research-oriented, open-source fluid simulation toolkit.
-It is written mostly in Python and can use both NumPy and TensorFlow for execution.
+![TestsetIterations](documentation/figures/results_testset_iterations.PNG)
 
-Having all functionality of a fluid simulation running in TensorFlow opens up the possibility of back-propagating gradients through the simulation as well as running the simulation on GPUs.
+## Simulation Performance
+We evaluated the pressure predictors' in-simulation performance when used to fully replace the CG solver (Network simulation) and when used as an in conjunction with the CG solver to provide an initial guess (hybrid simulation).
 
-## Features
+### Network Simulation
+The Physics-based model proved much more stable than either of the others, which was expected as its output has the highest standalone accuracy (as shown on the test dataset). However, the solver-based model showed much more unstable behaviour than anticipated. This instability can be traced to a checkerboard pattern that our solver-based approach introduces into its prediction. These artifacts lead to accumulating residual error as the network makes consecutive predicitons. 
 
-- Variety of built-in fully-differentiable simulations, ranging from Burgers and Navier-Stokes to the Schrödinger equation.
-- Tight integration with [TensorFlow](https://www.tensorflow.org/) and [PyTorch](https://pytorch.org/) (experimental) allowing for straightforward neural network training with fully differentiable simulations that run on the GPU.
-- Object-oriented architecture enabling concise and expressive code, designed for ease of use and extensibility.
-- Reusable simulation code, independent of backend and dimensionality, i.e. the exact same code can run a 2D fluid sim using NumPy and a 3D fluid sim on the GPU using TensorFlow or PyTorch.
-- Flexible, easy-to-use [web interface](documentation/Web_Interface.md) featuring live visualizations and interactive controls that can affect simulations or network training on the fly.
+We suspect this pattern to be the result of training the network with a direct difference to a CG-solver iteration with limited iterations. In the initial training steps, the network's guess is similar to a zero guess. Therefore, minimizing its difference to a CG solution computed by performing e.g. 5 iterations on top of it makes the network emulate the checkerboard patterns these intermediate CG solutions often contain.
 
-## Installation
+### Hybrid Simulation
+Using the trained models together with the CG solver, the solver-based approach fares much better. As on the test dataset, it is the most effective approach at reducing the iterations the solver needs to reach its target accuracy. This leads to tangible simulation speed-ups. Using a hybrid simulation scheme and our SOL model, simulation steps with an accuracy target of 10^-3 require less than half the computation time compared to a standard simulation step with zero guess.
 
-To install Φ<sub>*Flow*</sub> with web interface, run:
+![HybridSimPerformance](documentation/figures/results_hybridsim_performance.PNG)
 
-```bash
-$ pip install phiflow[gui]
-```
+## Combining Solver-Based and Physics-Informed Training
+To leverage both the stability advantage we observed for the physics-informed model and the reduction in solver iterations provided by the solver-based training approach, we combined them into a fourth loss formulation. This approach no longer contains a direct difference of the network's output to an intermediate solver solution. Instead, it uses the output plus 5 additional differentiable solver iterations to correct the input divergence. The combined loss then minimizes the residual divergence of that correction.
 
-Install TensorFlow or PyTorch in addition to Φ<sub>*Flow*</sub> to enable machine learning capabilities and GPU execution.
+We found that this effectively eliminated the checkerboard pattern and stability issues our previous solver-based approach showed, while maintaining the iteration reduction it enabled. The combined loss formulation can therefore be used to train models that function well as standalone pressure solvers and as providers of an initial pressure guess for the CG solver.
 
-See the [detailed installation instructions](documentation/Installation_Instructions.md) on how to compile the custom CUDA operators and verify your installation.
-
-## Documentation and Guides
-
-| [Index](documentation) | [Demos](demos) / [Tests](tests) | [Source](phi) | [<img src="https://www.tensorflow.org/images/colab_logo_32px.png" height=16> Fluids Tutorial](https://colab.research.google.com/drive/1S21OY8hzh1oZK2wQyL3BNXvSlrMTtRbV#offline=true&sandboxMode=true) / [Playground](https://colab.research.google.com/drive/1zBlQbmNguRt-Vt332YvdTqlV4DBcus2S#offline=true&sandboxMode=true) |
-|------------------------|---------------------------------|---------------| -----------------------------|
-
-If you would like to get right into it and have a look at some code, check out the
-[tutorial notebook on Google Colab](https://colab.research.google.com/drive/1S21OY8hzh1oZK2wQyL3BNXvSlrMTtRbV#offline=true&sandboxMode=true).
-It lets you run fluid simulations with Φ<sub>*Flow*</sub> in the browser.
-
-The following introductory demos are also helpful to get started with writing your own app using Φ<sub>*Flow*</sub>:
-
-- [simpleplume.py](./demos/simpleplume.py): Runs a fluid simulation and displays it in the browser
-- [optimize_pressure.py](./demos/optimize_pressure.py): Uses TensorFlow to optimize a velocity channel. TensorBoard can be started from the GUI and displays the loss.
-
-
-### Running simulations
-
-The [simulation overview](documentation/Simulation_Overview.md) explains how to run predefined simulations using either the [NumPy or TensorFlow](documentation/NumPy_and_TensorFlow_Execution.md) backend. It also introduces the GUI.
-
-To learn how specific simulations are implemented, check out the documentation for [Fluids](documentation/Fluid_Simulation.md) or read about [staggered grids](documentation/Staggered_Grids.md) or [pressure solvers](documentation/Pressure_Solvers.md).
-
-[Writing a Φ<sub>*Flow*</sub> Application](documentation/Web_Interface.md) introduces the high-level classes and explains how to use the Φ<sub>*Flow*</sub> GUI for displaying a simulation.
-
-For I/O and data management, see the [data documentation](documentation/Reading_and_Writing_Data.md) or the [scene format specification](documentation/Scene_Format_Specification.md).
-
-
-### Optimization and Learning
-
-For training machine learning models, [this document](documentation/Interactive_Training_Apps.md) gives an introduction into writing a GUI-enabled application.
-
-
-### Architecture
-
-The [simulation code design documentation](documentation/Simulation_Architecture.md) provides a deeper look into the object-oriented code design of simulations.
-
-All simulations of continuous systems are based on the [Field API](documentation/Fields.md) and underlying all states is the [struct API](documentation/Structs.ipynb).
-
-The [software architecture documentation](documentation/Software_Architecture.md) shows the building blocks of Φ<sub>*Flow*</sub> and the module dependencies.
-
-## Version History
-
-The [Version history](https://github.com/tum-pbs/PhiFlow/releases) lists all major changes since release.
-
-## Known Issues
-
-TensorBoard: Live supervision does not work when running a local app that writes to a remote directory.
-
-Resampling / Advection: NumPy interpolation handles the boundaries slightly differently than TensorFlow.
-
-## Contributions
-
-Contributions are welcome! Check out [this document](CONTRIBUTING.md) for guidelines.
-
-## Acknowledgements
-
-This work is supported by the ERC Starting Grant realFlow (StG-2015-637014) and the Intel Intelligent Systems Lab.
-
+![CombinedLoss](documentation/figures/results_testset_combinedloss.PNG)
