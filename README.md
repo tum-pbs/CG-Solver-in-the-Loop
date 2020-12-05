@@ -1,16 +1,27 @@
 # Solver-Based Learning of Pressure Fields for Eulerian Fluid Simulation
 
-In this work, we investigated different approaches to training a Convolutional Neural Network (CNN)
-so that it can infer an approximate pressure solution that can be used as an initial guess for a 
-Conjugate Gradient (CG) solver in a Eulerian fluid simulation.
+## Overview
 
-In particular, we compared three different loss formulations:
-1. SUP: A standard supervised loss
-2. PHY: An unsupervised, physics-informed loss (directly minimizing the residual divergence after correcting with the pressure guess)
-3. SOL: A loss including the differentiable CG solver which minimizes the difference of the network's prediction to a limited-iteration CG solution computed on top of the network's guess
+This is the source code repository for the _CG-Solver_ component (written by Robert Brand) of the NeurIPS'20 paper "Solver-in-the-Loop: Learning from Differentiable Physics to Interact with Iterative PDE-Solvers" (authors Kiwon Um, Raymond (Yun) Fei, Philipp Holl, Robert Brand, and Nils Thuerey; <http://arxiv.org/abs/2007.00016>).
+
+The goal of this component is to train a Convolutional Neural Network (CNN) in combination with a differentiable iterative solver for linear systems of equations, such that it learns to produce initial guesses that are suitable for quick error reductions in the iterative solver. In addition to the versions presented in our paper, we include an improved variant below that combines a divergence residual with the solver-in-the-loop training. This _SOL-phy_ version is explained in more detail in section 6.4.3 (p44) of Robert's thesis: <https://ge.in.tum.de/download/2020-solver-in-the-loop/CG-solver-in-the-loop.pdf>
+ 
+The full Solver-in-the-Loop code, containing code for training in conjunction with other PDE-solvers (such as Navier-Stokes) can be found at: <https://github.com/tum-pbs/Solver-in-the-Loop>
+
+# Results
+
+we investigate the interaction of learning models with conjugate gradient (CG) solvers. We target Poisson problems, which often arise many PDEs, e.g., in electrostatics or in fluid flow problems where the pressure gradient is subtracted from a divergent flow to compute a divergence-free motion. Specifically, we explore the iteration behavior of the CG solver given an initial state predicted by a trained model.
+
+We investigate different approaches to training a CNN so that it can infer a pressure solution that can be used as an initial guess for a Conjugate Gradient (CG) solver in a Eulerian Poisson solver, e.g. for the pressure correction step of a fluid simulation.
+
+In particular, we compare three different loss formulations and use a slightly different notation from the main paper:
+1. _SUP_: A standard supervised loss (previously denoted by NON in the main paper)
+2. _PHY_: An unsupervised, physics-informed loss (directly minimizing the residual divergence after correcting with the pressure guess)
+3. _SOL_: A loss including the differentiable CG solver which minimizes the difference of the network's prediction to a limited-iteration CG solution computed on top of the network's guess
+4. _SOL-phy_
 
 This repository contains the source code used to generate the data, train the models and analyze their performance.
-It also includes the snapshot of Φ<sub>*Flow*</sub> that was used for these experiments, which is not the most current version.
+It also includes a snapshot of Φ<sub>*Flow*</sub> (<https://github.com/tum-pbs/PhiFlow>) that was used for these experiments.
 
 ## Test Dataset Performance
 Comparing the three approaches on sample divergence fields from our test dataset, we observed that the physics-based loss leads to a higher accuracy of the network's prediction itself, yet performs much worse as an initial guess for the CG solver than the solver-based approach in particular.
@@ -35,8 +46,23 @@ Using the trained models together with the CG solver, the solver-based approach 
 ![HybridSimPerformance](documentation/figures/results_hybridsim_performance.PNG)
 
 ## Combining Solver-Based and Physics-Informed Training
+
 To leverage both the stability advantage we observed for the physics-informed model and the reduction in solver iterations provided by the solver-based training approach, we combined them into a fourth loss formulation. This approach no longer contains a direct difference of the network's output to an intermediate solver solution. Instead, it uses the output plus 5 additional differentiable solver iterations to correct the input divergence. The combined loss then minimizes the residual divergence of that correction.
 
 We found that this effectively eliminated the checkerboard pattern and stability issues our previous solver-based approach showed, while maintaining the iteration reduction it enabled. The combined loss formulation can therefore be used to train models that function well as standalone pressure solvers and as providers of an initial pressure guess for the CG solver.
 
 ![CombinedLoss](documentation/figures/results_testset_combinedloss.PNG)
+
+# How to run the code
+
+How to ...
+
+# Conclusions
+
+The SOL-phy model is able to cope with the divergence resulting from its own pressure corrections significantly better than the other versions, leading to a residual divergence that only slowly increases and even stagnates. This is even more interesting considering that, although it does not have the same checkerboard artifacts as SOL-5, there is a noticeable striped pattern in SOL-phy’s residual divergence. It appears that using the physics-baseed error metric for the final comparison instead of a direct difference between network output and solver output makes the trained network more tolerant to erratic patterns in its input.
+
+In summary, SOL-phy combines the advantages of PHY and SOL-5 versions effectively. Due to observing the solver at training time, it retains the usefulness as an initial guess for the CG solver and thus achieves an almost identical speed-up as SOL-5 in a hybrid simulation. It also gains in simulation stability, as its error is ultimately determined by the actual physical residual.
+
+Oveall our results demonstrate the usefulness of training neural networks in conjunction with the PDE environment in which they should later on be employed. Specifically, the results here demonstrate the importance of this training methodology for iterative solvers, and there is a large vareity of interesting developments to be made in order to obtain robust and efficient solvers that combine traditional numerical methods with trained neural networks.
+
+If you find this repository useful, or have ideas for improvements we'd be happy to hear from you, e.g., at <i15ge@cs.tum.edu>!
