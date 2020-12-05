@@ -4,11 +4,11 @@
 
 This is the source code repository for the _CG-Solver_ component (written by Robert Brand) of the NeurIPS'20 paper "Solver-in-the-Loop: Learning from Differentiable Physics to Interact with Iterative PDE-Solvers" (authors Kiwon Um, Raymond (Yun) Fei, Philipp Holl, Robert Brand, and Nils Thuerey; <http://arxiv.org/abs/2007.00016>).
 
-The goal of this component is to train a Convolutional Neural Network (CNN) in combination with a differentiable iterative solver for linear systems of equations, such that it learns to produce initial guesses that are suitable for quick error reductions in the iterative solver. In addition to the versions presented in our paper, we include an improved variant below that combines a divergence residual with the solver-in-the-loop training. This *SOL-phy* version is explained in more detail in section 6.4.3 (p44) of Robert's thesis: <https://ge.in.tum.de/download/2020-solver-in-the-loop/CG-solver-in-the-loop.pdf>
+The goal of this component is to train a Convolutional Neural Network (CNN) in combination with a differentiable iterative solver for linear systems of equations, such that it learns to produce initial guesses that are suitable for quick error reductions in the iterative solver. In addition to the versions presented in our paper, we include an improved variant below that combines a divergence residual with the solver-in-the-loop training. This *SOL-phy* version is explained in more detail in section 6.4.3 (p44) of [Robert's thesis](https://ge.in.tum.de/download/2020-solver-in-the-loop/CG-solver-in-the-loop.pdf)
  
-The full Solver-in-the-Loop code, containing code for training in conjunction with other PDE-solvers (such as Navier-Stokes) can be found at: <https://github.com/tum-pbs/Solver-in-the-Loop>
+The full Solver-in-the-Loop code, containing code for training in conjunction with other PDE-solvers (such as Navier-Stokes) can be found at: <https://github.com/tum-pbs/Solver-in-the-Loop> , and here's the main [project page](https://ge.in.tum.de/publications/2020-um-solver-in-the-loop/).
 
-Project page: 
+![Main paper teaser](documentation/figures/SOL-teaser-github-wtitle.jpeg)
 
 # Results
 
