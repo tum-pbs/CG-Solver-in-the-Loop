@@ -3,7 +3,7 @@
 
 ## Context
 
-![Context](./figures/Context.png)
+![Context](./figures/Context.jpeg)
 
 |    Actor / System    |    Description                                                                                  |
 |----------------------|-------------------------------------------------------------------------------------------------|
@@ -14,7 +14,7 @@
 
 ## Building Blocks
 
-![Building Blocks](./figures/Building_Blocks.png)
+![Building Blocks](./figures/Building_Blocks.jpeg)
 
 |    Actor / System |    Description                                                                                        |
 |-------------------|-------------------------------------------------------------------------------------------------------|
@@ -26,4 +26,4 @@
 
 ## Module dependencies
 
-![Module Diagram](./figures/Module_Diagram.png)
+![Module Diagram](./figures/Module_Diagram.jpeg)

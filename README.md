@@ -4,9 +4,11 @@
 
 This is the source code repository for the _CG-Solver_ component (written by Robert Brand) of the NeurIPS'20 paper "Solver-in-the-Loop: Learning from Differentiable Physics to Interact with Iterative PDE-Solvers" (authors Kiwon Um, Raymond (Yun) Fei, Philipp Holl, Robert Brand, and Nils Thuerey; <http://arxiv.org/abs/2007.00016>).
 
-The goal of this component is to train a Convolutional Neural Network (CNN) in combination with a differentiable iterative solver for linear systems of equations, such that it learns to produce initial guesses that are suitable for quick error reductions in the iterative solver. In addition to the versions presented in our paper, we include an improved variant below that combines a divergence residual with the solver-in-the-loop training. This _SOL-phy_ version is explained in more detail in section 6.4.3 (p44) of Robert's thesis: <https://ge.in.tum.de/download/2020-solver-in-the-loop/CG-solver-in-the-loop.pdf>
+The goal of this component is to train a Convolutional Neural Network (CNN) in combination with a differentiable iterative solver for linear systems of equations, such that it learns to produce initial guesses that are suitable for quick error reductions in the iterative solver. In addition to the versions presented in our paper, we include an improved variant below that combines a divergence residual with the solver-in-the-loop training. This *SOL-phy* version is explained in more detail in section 6.4.3 (p44) of Robert's thesis: <https://ge.in.tum.de/download/2020-solver-in-the-loop/CG-solver-in-the-loop.pdf>
  
 The full Solver-in-the-Loop code, containing code for training in conjunction with other PDE-solvers (such as Navier-Stokes) can be found at: <https://github.com/tum-pbs/Solver-in-the-Loop>
+
+Project page: 
 
 # Results
 
@@ -15,10 +17,10 @@ we investigate the interaction of learning models with conjugate gradient (CG) s
 We investigate different approaches to training a CNN so that it can infer a pressure solution that can be used as an initial guess for a Conjugate Gradient (CG) solver in a Eulerian Poisson solver, e.g. for the pressure correction step of a fluid simulation.
 
 In particular, we compare three different loss formulations and use a slightly different notation from the main paper:
-1. _SUP_: A standard supervised loss (previously denoted by NON in the main paper)
-2. _PHY_: An unsupervised, physics-informed loss (directly minimizing the residual divergence after correcting with the pressure guess)
-3. _SOL_: A loss including the differentiable CG solver which minimizes the difference of the network's prediction to a limited-iteration CG solution computed on top of the network's guess
-4. _SOL-phy_
+1. *SUP*: A standard supervised loss (previously denoted by NON in the main paper)
+2. *PHY*: An unsupervised, physics-informed loss (directly minimizing the residual divergence after correcting with the pressure guess)
+3. *SOL*: A loss including the differentiable CG solver which minimizes the difference of the network's prediction to a limited-iteration CG solution computed on top of the network's guess
+4. *SOL-phy*
 
 This repository contains the source code used to generate the data, train the models and analyze their performance.
 It also includes a snapshot of Φ<sub>*Flow*</sub> (<https://github.com/tum-pbs/PhiFlow>) that was used for these experiments.
@@ -53,9 +55,17 @@ We found that this effectively eliminated the checkerboard pattern and stability
 
 ![CombinedLoss](documentation/figures/results_testset_combinedloss.PNG)
 
+The following image shows several frames of an example simulation comparing the SOL-5 and SOL-phy models with a reference simulation:
+
+![SOLphySimRun](documentation/figures/results_solphysim_example.jpg)
+
 # How to run the code
 
-How to ...
+Simply run ...
+
+```
+python nn/nn_combi_v3.py
+```
 
 # Conclusions
 
@@ -66,3 +76,13 @@ In summary, SOL-phy combines the advantages of PHY and SOL-5 versions effectivel
 Oveall our results demonstrate the usefulness of training neural networks in conjunction with the PDE environment in which they should later on be employed. Specifically, the results here demonstrate the importance of this training methodology for iterative solvers, and there is a large vareity of interesting developments to be made in order to obtain robust and efficient solvers that combine traditional numerical methods with trained neural networks.
 
 If you find this repository useful, or have ideas for improvements we'd be happy to hear from you, e.g., at <i15ge@cs.tum.edu>!
+
+You can cite our paper via:
+```
+@article{um2020sol,
+  title="{Solver-in-the-Loop: Learning from Differentiable Physics to Interact with Iterative PDE-Solvers}",
+  author={Um, Kiwon and Fei, Yun and Brand, Robert and Holl, Philipp and Thuerey, Nils},
+  journal={Advances in Neural Information Processing Systems},
+  year={2020}
+}
+```

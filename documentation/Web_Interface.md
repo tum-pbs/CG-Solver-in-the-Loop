@@ -1,6 +1,6 @@
 # Φ<sub>*Flow*</sub> Web Interface
 
-![Gui](figures/WebInterface.png)
+![Gui](figures/WebInterface.jpeg)
 
 Φ<sub>*Flow*</sub> contains an interactive web interface that can display 1D, 2D and 3D data.
 The interface is displayed in the browser so it can be used remotely.
