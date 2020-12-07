@@ -61,11 +61,40 @@ The following image shows several frames of an example simulation comparing the 
 
 # How to run the code
 
-Simply run ...
+## Data Generation
+To generate a dataset of randomized simulations, navigate to /nn and run:
+```
+python datagen_v3.py NUMBER_OF_SIMULATIONS
+```
+Replace NUMBER_OF_SIMULATIONS by the number of simulations you want, e.g. 3000.
 
+## Training
+To run one of the training scripts, navigate to /nn and run:
 ```
-python nn/nn_combi_v3.py
+python TRAINING_SCRIPT NUMBER_OF_OPTIMIZATION_STEPS
 ```
+For TRAINING_SCRIPT, insert one of the following:
+- SUP: ```nn_supervised_v3.py```
+- SOL: ```nn_unet3_v3.py``` (adjust the step width k inside the script)
+- PHY: ```nn_tompson_scalar_v3.py```
+- SOL-PHY: ```nn_combi_v3.py ```
+
+Substitute NUMBER_OF_OPTIMIZATION_STEPS by a number, such as e.g. 300000, to determine how many training steps should be performed.
+Also make sure the DATAPATH variable inside the script points to your dataset that should be used for training and validation.
+By default, the scripts expect the dataset to comprise 3000 simulations, but you can easily adjust this in each script.
+
+## Running Simulations
+To use the trained models in a simulation where they act as a standalone pressure solver, run:
+```
+python nn_simulation_v3
+```
+Open the PhiFlow web interface, input the path to your checkpoint and press "Load Model". After this, you can run the simulation and see how your model performs.
+
+For a hybrid simulation (where the model predicts an initial pressure guess and the CG solver iterates upon it until it reaches the target accuracy), run:
+```
+python nn_simulation_hybrid.py
+```
+And follow the same steps as for the network simulation.
 
 # Conclusions
 
