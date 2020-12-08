@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is the source code repository for the _CG-Solver_ component (written by Robert Brand) of the NeurIPS'20 paper "Solver-in-the-Loop: Learning from Differentiable Physics to Interact with Iterative PDE-Solvers" (authors Kiwon Um, Raymond (Yun) Fei, Philipp Holl, Robert Brand, and Nils Thuerey; <http://arxiv.org/abs/2007.00016>).
+This is the source code repository for the _CG-Solver_ component (written by Robert Brand) of the NeurIPS'20 paper "Solver-in-the-Loop: Learning from Differentiable Physics to Interact with Iterative PDE-Solvers" (authors Kiwon Um, Robert Brand, Raymond (Yun) Fei, Philipp Holl, and Nils Thuerey; <http://arxiv.org/abs/2007.00016>).
 
 The goal of this component is to train a Convolutional Neural Network (CNN) in combination with a differentiable iterative solver for linear systems of equations, such that it learns to produce initial guesses that are suitable for quick error reductions in the iterative solver. In addition to the versions presented in our paper, we include an improved variant below that combines a divergence residual with the solver-in-the-loop training. This *SOL-phy* version is explained in more detail in section 6.4.3 (p44) of [Robert's thesis](https://ge.in.tum.de/download/2020-solver-in-the-loop/CG-solver-in-the-loop.pdf)
  
@@ -110,7 +110,7 @@ You can cite our paper via:
 ```
 @article{um2020sol,
   title="{Solver-in-the-Loop: Learning from Differentiable Physics to Interact with Iterative PDE-Solvers}",
-  author={Um, Kiwon and Fei, Yun and Brand, Robert and Holl, Philipp and Thuerey, Nils},
+  author={Um, Kiwon Brand, Robert and and Fei, Yun and Holl, Philipp and Thuerey, Nils},
   journal={Advances in Neural Information Processing Systems},
   year={2020}
 }
